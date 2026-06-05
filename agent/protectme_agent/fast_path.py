@@ -120,11 +120,17 @@ def wants_generate(user_text: str) -> bool:
 # "write WhatsApp message make it short" was generating an email. Detect the
 # requested format and any short/long instruction directly from the user text.
 _WHATSAPP_RE = re.compile(
-    r"\b(whats ?app|whatsapp|wapp|\bwa\b|text(?: message)?|sms|dm)\b", re.IGNORECASE
+    r"\b(whats ?app|whatsapp|wapp|\bwa\b|text(?: message)?|sms|dm)\b"
+    r"|واتساب|واتس|رسالة قصيرة|رساله قصيره",
+    re.IGNORECASE,
 )
-_EMAIL_RE = re.compile(r"\b(e[- ]?mails?|emails?|mail|formal email)\b", re.IGNORECASE)
+_EMAIL_RE = re.compile(
+    r"\b(e[- ]?mails?|emails?|mail|formal email)\b|ايميل|إيميل|بريد",
+    re.IGNORECASE,
+)
 _SHORT_RE = re.compile(
-    r"\b(short|shorter|shortly|brief|briefly|concise|small|tiny|quick|to the point)\b",
+    r"\b(short|shorter|shortly|brief|briefly|concise|small|tiny|quick|to the point)\b"
+    r"|قصير|قصيرة|قصيره|مختصر|مختصرة|موجز|بإيجاز",
     re.IGNORECASE,
 )
 _LONGER_RE = re.compile(
@@ -168,6 +174,53 @@ def wants_modify(user_text: str) -> bool:
 
 def is_recommendation(user_text: str) -> bool:
     return bool(_RECOMMEND_RE.search(user_text or ""))
+
+
+# ── Arabic language support (Phase 8H) ───────────────────────────────────────
+# Lightweight, per-turn language detection + Arabic intent matching so Arabic
+# questions route to the same fast-path intents and answer from the risk_report.
+
+_ARABIC_SCRIPT = re.compile(r"[؀-ۿݐ-ݿࢠ-ࣿ]")
+
+
+def detect_language(user_text: str) -> str:
+    """Per-turn response language: 'ar' if the text is Arabic OR explicitly asks
+    for Arabic ('explain in Arabic', 'بالعربي'); otherwise 'en'."""
+    return "ar" if wants_arabic(user_text) else "en"
+
+
+# Arabic phrasings for each fast-path intent. Arabic has no word boundaries like
+# \b, so these match substrings (with common hamza spelling variants).
+_AR_PATTERNS: list[tuple[str, re.Pattern]] = [
+    (GENERATE_MESSAGE, re.compile(
+        r"(اكتب|أكتب|اكتبي|جهّز|جهز|صغ|صياغة|أنشئ|انشئ).{0,18}"
+        r"(رسالة|رساله|ايميل|إيميل|بريد|واتساب|واتس|رد|ردا|ردًا)"
+        r"|رسالة واتساب|رسالة قصيرة|اكتب رد|اكتب لي")),
+    (BIGGEST_RISK, re.compile(
+        r"(أكبر|اكبر|أعظم|اعظم|الأكبر).{0,15}(خطر|خطورة|مشكلة|بند|مخاطر|شيء|شي)"
+        r"|(أخطر|اخطر).{0,10}(بند|شيء|شي|خطر)"
+        r"|(أكثر|اكثر).{0,10}خطورة|الخطر الأكبر")),
+    (SHOULD_I_SIGN, re.compile(
+        r"هل أوقع|هل اوقع|هل أوقّع|أوقع العقد|اوقع العقد|توقيع العقد"
+        r"|هل تنصحني|تنصحني أوقع|تنصحني اوقع|هل العقد آمن|العقد آمن"
+        r"|هل أرفض|هل ارفض|أرفض العقد|ارفض العقد|هل أوافق|هل اوافق")),
+    (WHAT_TO_ASK, re.compile(
+        r"ماذا أسأل|ماذا اسأل|وش أسأل|وش اسأل|ايش أسأل|إيش أسأل"
+        r"|ما السؤال|أي سؤال|اي سؤال|ماذا أطلب|ماذا اطلب|ماذا يجب أن أسأل|أسئلة|اسئلة")),
+    (EXPLAIN_CLAUSE, re.compile(
+        r"اشرح|اشرحي|إشرح|وضّح|وضح|فسّر|فسر|بسّط|بسط"
+        r"|ماذا يعني|ما معنى|وش يعني|ايش يعني|أبغى شرح|ابغى شرح|أريد شرح|اريد شرح"
+        r"|بطريقة سهلة|بشكل سهل|بطريقة بسيطة")),
+]
+
+
+def match_arabic_intent(user_text: str) -> Optional[str]:
+    """Return the fast-path key for an Arabic question, or None."""
+    t = user_text or ""
+    for key, pat in _AR_PATTERNS:
+        if pat.search(t):
+            return key
+    return None
 
 
 def modify_confirmation(user_text: str) -> str:

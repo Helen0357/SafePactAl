@@ -36,7 +36,7 @@ export function FilterTabs({ active, onChange, report }: FilterTabsProps) {
         >
           {t.dot && <span className="ftab-dot" style={{ background: t.dot }} />}
           {t.label}
-          <span className="ftab-ct" style={{ color: t.dot }}>
+          <span className="ftab-ct" style={{ color: t.dot ?? undefined }}>
             {counts[t.id]}
           </span>
         </button>

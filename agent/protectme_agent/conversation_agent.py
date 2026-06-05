@@ -75,9 +75,10 @@ class ConversationAgent:
                 yield event
             return
 
-        # 2. Arabic — answer in Arabic (text always; voice best-effort).
-        if report and fp.wants_arabic(user_text):
-            async for event in self._handle_arabic(user_text, session):
+        # 2. Arabic — route Arabic (or "explain in Arabic") questions to the
+        #    Arabic-aware handler: same fast-path intents, answered in Arabic.
+        if report and fp.detect_language(user_text) == "ar":
+            async for event in self._handle_arabic_routed(user_text, session):
                 yield event
             return
 
@@ -509,26 +510,65 @@ class ConversationAgent:
         async for event in self._stream_gemini_answer(user_text, session, extra):
             yield event
 
-    async def _handle_arabic(self, user_text: str, session):
-        """Answer in Arabic. Text is always localized; spoken voice is best-effort
-        (an Arabic TTS voice is attempted, English remains as a last resort)."""
-        yield {
-            "type": "debug",
-            "log": "[Voice] Arabic requested — text localized, voice fallback may remain English",
-        }
-        focus = ""
-        if session.active_clause_id and session.risk_report:
-            focus = (
-                f" Focus on the currently selected clause (id {session.active_clause_id})."
-            )
-        extra = (
-            "Respond ENTIRELY in Arabic (العربية), using Modern Standard Arabic. "
-            "Explain in 2 to 5 short, simple Arabic sentences: what the clause means, "
-            "why it matters, and what to ask before signing." + focus +
-            " Do not use any English words. Keep each sentence short and clear."
-        )
+    # ── Arabic (Phase 8H) ─────────────────────────────────────────────────────
+
+    async def _handle_arabic_routed(self, user_text: str, session):
+        """Answer Arabic (or 'explain in Arabic') questions. Detects the same
+        fast-path intent (English or Arabic phrasing), then answers in Arabic:
+          • generate_message → real draft tool, written in Arabic, format respected
+          • biggest/explain/sign/ask → ONE fast flash-lite call, focused on the
+            exact risk_report data for that intent (the analyzed report is in
+            English, so a single fast call renders it in fluent Arabic)
+          • anything else → general Arabic answer grounded in the report
+        No intent-router round-trip; always the fast voice_fallback_model."""
+        from protectme_agent import fast_path as fp
+
+        key = fp.match_fast_path(user_text) or fp.match_arabic_intent(user_text)
+        yield {"type": "debug", "log": f"[Arabic] lang=ar intent={key or 'general'}"}
+
+        # Generate an Arabic message draft (needs a focused clause, like English).
+        if key == fp.GENERATE_MESSAGE and session.active_clause_id:
+            fmt = fp.detect_message_format(user_text)
+            extra_bits = ["Write the entire message in Arabic (العربية)."]
+            mi = fp.message_extra_instruction(user_text)
+            if mi:
+                extra_bits.append(mi)
+            intent = _FastIntent(format=fmt, extra_instruction=" ".join(extra_bits))
+            async for event in self._handle_generate_message(intent, session):
+                yield event
+            return
+
+        extra = self._arabic_extra_system(key, session)
         async for event in self._stream_gemini_answer(user_text, session, extra):
             yield event
+
+    def _arabic_extra_system(self, key, session) -> str:
+        """Arabic system instruction + a focus directive for the detected intent."""
+        from protectme_agent import fast_path as fp
+
+        base = (
+            "أجب باللغة العربية الفصحى البسيطة والواضحة فقط. استخدم تقرير المخاطر "
+            "الموجود أعلاه، ولا تطلب من المستخدم ذكر أو مشاركة المخاطر — فالتقرير لديك. "
+            "اجعل الإجابة من جملتين إلى خمس جمل قصيرة بأسلوب محادثة، بدون فقرات طويلة "
+            "أو مصطلحات قانونية معقدة، ولا تستخدم كلمات إنجليزية."
+        )
+        if key == fp.BIGGEST_RISK:
+            focus = " ركّز على أخطر بند (الأعلى خطورة) في التقرير واشرح باختصار لماذا هو مهم."
+        elif key == fp.SHOULD_I_SIGN:
+            focus = (
+                " بناءً على التوصية النهائية ومستوى الخطورة في التقرير، انصح المستخدم "
+                "هل يوقّع الآن أم لا، بحذر ودون قطعية قانونية، واقترح طلب تأكيد كتابي."
+            )
+        elif key == fp.WHAT_TO_ASK:
+            focus = " اقترح سؤالاً أو سؤالين مناسبين يطرحهما المستخدم قبل التوقيع، مأخوذة من التقرير."
+        elif key == fp.EXPLAIN_CLAUSE and session.active_clause_id:
+            focus = (
+                " ركّز فقط على البند المحدد حالياً: اشرح معناه ببساطة، ثم لماذا يهم، "
+                "ثم سؤال واحد مناسب يطرحه المستخدم قبل التوقيع."
+            )
+        else:
+            focus = ""
+        return base + focus
 
     async def _handle_modify_message(self, user_text: str, session):
         """Modify the most recent generated draft (shorter/formal/firmer/…) and

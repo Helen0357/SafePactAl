@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     google_cloud_tts_voice: str = "en-US-Journey-D"    # Journey warm male
     google_cloud_tts_language: str = "en-US"
     tts_provider: str = "google_cloud"                  # google_cloud | gemini
+    # Arabic voice (Phase 8H). Leave the voice blank to let Google pick a default
+    # ar-XA voice (logged as fallback). Set a verified ar-XA voice name to lock it.
+    # Discover available voices: python -m app.utils.list_voices ar
+    google_cloud_tts_arabic_voice: str = ""
+    google_cloud_tts_arabic_language: str = "ar-XA"
     # Per-chunk TTS timeout — if one chunk's synthesis exceeds this, we emit a
     # tts_error (text fallback) for that chunk instead of blocking the whole turn.
     tts_chunk_timeout_seconds: float = 8.0

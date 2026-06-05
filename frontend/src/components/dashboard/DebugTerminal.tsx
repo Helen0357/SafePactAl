@@ -1,8 +1,15 @@
 "use client";
 import { LucideIcon } from "@/components/ui/Icon";
+import type { DebugLine } from "@/lib/types";
 import { useEffect, useRef } from "react";
 
-export function DebugTerminal({ open, onToggle, lines }) {
+interface DebugTerminalProps {
+  open: boolean;
+  onToggle: () => void;
+  lines: DebugLine[];
+}
+
+export function DebugTerminal({ open, onToggle, lines }: DebugTerminalProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

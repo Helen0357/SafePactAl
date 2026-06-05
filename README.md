@@ -26,6 +26,7 @@ messages about them, and *talk to a voice agent* for follow‑up questions.
 - **Call Your Agent** — a voice panel: ask questions out loud or by text and the
   agent answers, explains clauses, recommends, and drafts messages.
 - **Journey TTS voice** — Google Cloud "Journey" voice (~300 ms) speaks the answers.
+- **Arabic support** — ask in Arabic (or say "explain in Arabic") and the agent answers in Arabic with an Arabic voice; English questions stay English. Discover Arabic voices with `python -m app.utils.list_voices ar`.
 - **Debug terminal** — a live log panel (bottom bar) showing what the system is doing.
 
 **Current default mode**
@@ -129,8 +130,10 @@ Then open `backend/.env` and fill in the values. Line by line:
 | `GEMINI_LIVE_MODEL` | `gemini-2.5-flash-native-audio-latest` | **Experimental only** (Live mode). |
 | `TTS_PROVIDER` | `google_cloud` | `google_cloud` (Journey) or `gemini`. |
 | `GOOGLE_APPLICATION_CREDENTIALS` | `.secrets/google-tts-service-account.json` | Path **relative to `backend/`**. |
-| `GOOGLE_CLOUD_TTS_VOICE` | `en-US-Journey-D` | Journey warm male voice. |
+| `GOOGLE_CLOUD_TTS_VOICE` | `en-US-Journey-D` | Journey warm male voice (English). |
 | `GOOGLE_CLOUD_TTS_LANGUAGE` | `en-US` | |
+| `GOOGLE_CLOUD_TTS_ARABIC_VOICE` | `ar-XA-Wavenet-B` | Used when the answer is Arabic. Blank → Google picks a default ar-XA voice (logs a warning). |
+| `GOOGLE_CLOUD_TTS_ARABIC_LANGUAGE` | `ar-XA` | |
 | `TTS_CHUNK_TIMEOUT_SECONDS` | `8` | One slow TTS chunk won't block the whole reply. |
 | `BACKEND_CORS_ORIGINS` | `http://localhost:3000` | Comma‑separated allowed frontend origins. |
 | `FRONTEND_URL` | `http://localhost:3000` | Legacy single‑origin (still honored). |

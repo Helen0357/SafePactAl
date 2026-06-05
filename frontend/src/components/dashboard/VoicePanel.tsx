@@ -1066,12 +1066,13 @@ export function VoicePanel({
                       {t("draft.copy")}
                     </button>
                   </div>
-                  <pre className="text-xs text-slate-600 whitespace-pre-wrap">
+                  <pre dir="auto" className="text-xs text-slate-600 whitespace-pre-wrap">
                     {entry.text}
                   </pre>
                 </div>
               ) : (
                 <div
+                  dir="auto"
                   className={`max-w-[85%] p-5 rounded-2xl text-sm leading-relaxed font-medium  transition-all ${
                     entry.role === "user"
                       ? "bg-[#7aadff] text-white rounded-tr-none "
@@ -1086,7 +1087,7 @@ export function VoicePanel({
 
           {growingText !== null && (
             <div className="flex flex-col items-start animate-pulse">
-              <div className="max-w-[85%] p-5 rounded-2xl rounded-tl-none bg-[#67a1ff]/10 text-[#67a1ff] font-medium text-sm border border-[#67a1ff]/20">
+              <div dir="auto" className="max-w-[85%] p-5 rounded-2xl rounded-tl-none bg-[#67a1ff]/10 text-[#67a1ff] font-medium text-sm border border-[#67a1ff]/20">
                 {growingText || "..."}
               </div>
             </div>
