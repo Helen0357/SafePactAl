@@ -17,5 +17,16 @@ async def handle_set_active_clause(
     }
 
 
+async def handle_set_selected_clauses(
+    session_id: str, selected_clause_ids: list[str]
+) -> dict:
+    updated = session_service.set_selected_clauses(session_id, selected_clause_ids)
+    return {
+        "status": "ok",
+        "session_id": session_id,
+        "selected_clause_ids": updated.selected_clause_ids,
+    }
+
+
 async def handle_get_session(session_id: str) -> Session:
     return session_service.get_session(session_id)

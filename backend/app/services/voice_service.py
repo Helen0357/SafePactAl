@@ -57,7 +57,9 @@ logger = logging.getLogger(__name__)
 # Split long sentences at natural voice break points so TTS tasks are shorter,
 # start sooner, and audio arrives with lower perceived latency.
 
-_TTS_MAX_CHARS = 110   # target max chars per TTS chunk
+_TTS_MAX_CHARS = 180       # target max chars per TTS chunk
+_TTS_MIN_CHARS = 25        # merge chunks shorter than this into a neighbor
+_TTS_COALESCE_CHARS = 120  # accumulate streamed sentences up to ~this before synthesizing
 
 # Matches natural break points where a sentence can be split without losing meaning:
 #   comma/semicolon followed by space, em/en dash with spaces,
@@ -69,7 +71,7 @@ _BREAK_RE = re.compile(
 )
 
 
-def _chunk_for_tts(text: str, max_chars: int = _TTS_MAX_CHARS) -> list[str]:
+def _split_for_tts(text: str, max_chars: int = _TTS_MAX_CHARS) -> list[str]:
     """
     Recursively split a sentence into short TTS-friendly chunks.
     Splits at natural break points (comma, conjunction, dash).
@@ -95,9 +97,9 @@ def _chunk_for_tts(text: str, max_chars: int = _TTS_MAX_CHARS) -> list[str]:
         right = text[best.end() :].strip()
         result: list[str] = []
         if len(left) >= 8:
-            result.extend(_chunk_for_tts(left, max_chars))
+            result.extend(_split_for_tts(left, max_chars))
         if len(right) >= 8:
-            result.extend(_chunk_for_tts(right, max_chars))
+            result.extend(_split_for_tts(right, max_chars))
         if result:
             return result
 
@@ -108,13 +110,38 @@ def _chunk_for_tts(text: str, max_chars: int = _TTS_MAX_CHARS) -> list[str]:
         right = text[cut:].strip()
         result = []
         if len(left) >= 8:
-            result.extend(_chunk_for_tts(left, max_chars))
+            result.extend(_split_for_tts(left, max_chars))
         if len(right) >= 8:
-            result.extend(_chunk_for_tts(right, max_chars))
+            result.extend(_split_for_tts(right, max_chars))
         if result:
             return result
 
     return [text]  # cannot split reasonably — keep as-is
+
+
+def _merge_small(chunks: list[str], min_chars: int = _TTS_MIN_CHARS) -> list[str]:
+    """Merge tiny fragments into a neighbor so we don't synthesize/play very short
+    chunks (those cause more audible clicks/transitions). Keeps order."""
+    if not chunks:
+        return chunks
+    merged: list[str] = [chunks[0]]
+    for c in chunks[1:]:
+        # If the running last chunk is still too small, glue this one onto it.
+        if len(merged[-1]) < min_chars:
+            merged[-1] = f"{merged[-1]} {c}".strip()
+        else:
+            merged.append(c)
+    # Fold a tiny trailing chunk back into the previous one.
+    if len(merged) >= 2 and len(merged[-1]) < min_chars:
+        tail = merged.pop()
+        merged[-1] = f"{merged[-1]} {tail}".strip()
+    return merged
+
+
+def _chunk_for_tts(text: str, max_chars: int = _TTS_MAX_CHARS) -> list[str]:
+    """Split a sentence into TTS-friendly chunks, then merge tiny fragments so
+    transitions between chunks are fewer and smoother."""
+    return _merge_small(_split_for_tts(text, max_chars))
 
 
 # ── Preamble ──────────────────────────────────────────────────────────────────
@@ -444,6 +471,29 @@ class VoiceService:
             tts_tasks: list[asyncio.Task] = []
             seq = 0
             t_first_sentence: Optional[float] = None
+            pending_tts = ""  # coalesce short sentences into larger, smoother chunks
+
+            def schedule_tts(text: str) -> None:
+                """Chunk `text` and fire a TTS task per chunk (advances seq)."""
+                nonlocal seq
+                for chunk in _chunk_for_tts(text):
+                    task = asyncio.create_task(
+                        _tts_and_send(
+                            websocket,
+                            send_lock,
+                            chunk,
+                            seq=seq,
+                            turn_id=current_turn_id,
+                            t_turn_start=t_turn_start,
+                            emit_error_event=True,
+                            google_cloud_api_key=_google_key,
+                            gemini_api_key=_gemini_key,
+                            voice_name=_voice_name,
+                            timeout_seconds=_tts_timeout,
+                        )
+                    )
+                    tts_tasks.append(task)
+                    seq += 1
 
             # ── Preamble ───────────────────────────────────────────────────────
             # Short pre-answer played immediately while the answer is produced.
@@ -467,25 +517,7 @@ class VoiceService:
                 async with send_lock:
                     await websocket.send_json({"type": "sentence", "text": preamble})
                 assistant_parts.append(preamble)
-                chunks = _chunk_for_tts(preamble)
-                for chunk in chunks:
-                    task = asyncio.create_task(
-                        _tts_and_send(
-                            websocket,
-                            send_lock,
-                            chunk,
-                            seq=seq,
-                            turn_id=current_turn_id,
-                            t_turn_start=t_turn_start,
-                            emit_error_event=True,
-                            google_cloud_api_key=_google_key,
-                            gemini_api_key=_gemini_key,
-                            voice_name=_voice_name,
-                            timeout_seconds=_tts_timeout,
-                        )
-                    )
-                    tts_tasks.append(task)
-                    seq += 1
+                schedule_tts(preamble)  # preamble plays immediately (low latency)
                 t_first_sentence = time.monotonic() - t_turn_start
                 async with send_lock:
                     await websocket.send_json(
@@ -528,26 +560,17 @@ class VoiceService:
                                     }
                                 )
 
-                        # Split long sentences into shorter TTS chunks
-                        chunks = _chunk_for_tts(sentence_text)
-                        for chunk in chunks:
-                            task = asyncio.create_task(
-                                _tts_and_send(
-                                    websocket,
-                                    send_lock,
-                                    chunk,
-                                    seq=seq,
-                                    turn_id=current_turn_id,
-                                    t_turn_start=t_turn_start,
-                                    emit_error_event=True,
-                                    google_cloud_api_key=_google_key,
-                                    gemini_api_key=_gemini_key,
-                                    voice_name=_voice_name,
-                                    timeout_seconds=_tts_timeout,
-                                )
-                            )
-                            tts_tasks.append(task)
-                            seq += 1
+                        # Coalesce short sentences into larger (~120+ char) chunks
+                        # so audio has fewer, smoother transitions. The preamble
+                        # already covers first-audio latency.
+                        pending_tts = (
+                            f"{pending_tts} {sentence_text}".strip()
+                            if pending_tts
+                            else sentence_text
+                        )
+                        if len(pending_tts) >= _TTS_COALESCE_CHARS:
+                            schedule_tts(pending_tts)
+                            pending_tts = ""
 
                     if event.get("type") == "draft_ready":
                         generated = GeneratedMessage(
@@ -562,6 +585,11 @@ class VoiceService:
                             draft=event.get("draft", ""),
                         )
                         session_service.add_generated_message(session_id, generated)
+
+                # Flush any remaining coalesced text at the end of the agent turn.
+                if pending_tts.strip():
+                    schedule_tts(pending_tts)
+                    pending_tts = ""
 
             except WebSocketDisconnect:
                 logger.info("WS disconnected mid-turn — session: %s", session_id)

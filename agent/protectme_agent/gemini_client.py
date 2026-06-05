@@ -41,11 +41,30 @@ class GeminiClient:
             from google import genai
             self._client = genai.Client(api_key=self._api_key)
             logger.info(
-                "GeminiClient ready — analysis: %s | conversation: %s",
+                "GeminiClient ready — analysis: %s | conversation: %s | voice_fallback: %s",
                 self.analysis_model,
                 self.conversation_model,
+                self.voice_fallback_model,
             )
         return self._client
+
+    @staticmethod
+    def _thinking_config(model_name: str):
+        """Low-latency thinking config, per model family.
+        Gemini 3.x uses thinking_level='minimal' (Google's Gemini-3 setting);
+        Gemini 2.x uses thinking_budget=0. The two are never combined."""
+        from google.genai import types
+
+        name = model_name or ""
+        try:
+            if name.startswith("gemini-3"):
+                return types.ThinkingConfig(thinking_level="minimal")
+            return types.ThinkingConfig(thinking_budget=0)
+        except Exception:  # older SDK / unsupported field
+            try:
+                return types.ThinkingConfig(thinking_budget=0)
+            except Exception:
+                return None
 
     async def generate(
         self,
@@ -69,11 +88,10 @@ class GeminiClient:
             config_kwargs["response_mime_type"] = "application/json"
         if system:
             config_kwargs["system_instruction"] = system
-        # Disable extended thinking so pro models respond within seconds, not minutes
-        try:
-            config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
-        except AttributeError:
-            pass  # older SDK versions without ThinkingConfig
+        # Low-latency thinking config (model-aware) so responses are fast.
+        tc = self._thinking_config(model_name)
+        if tc is not None:
+            config_kwargs["thinking_config"] = tc
 
         config = types.GenerateContentConfig(**config_kwargs)
 
@@ -108,12 +126,10 @@ class GeminiClient:
         config_kwargs: dict = {"temperature": temperature}
         if system:
             config_kwargs["system_instruction"] = system
-        # Voice answers must be snappy: disable extended thinking so Flash/Flash-Lite
-        # respond in well under a second instead of pausing to "think".
-        try:
-            config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
-        except AttributeError:
-            pass  # older SDK without ThinkingConfig
+        # Voice answers must be snappy: minimal thinking (Gemini 3) / budget 0 (2.x).
+        tc = self._thinking_config(model_name)
+        if tc is not None:
+            config_kwargs["thinking_config"] = tc
         config = types.GenerateContentConfig(**config_kwargs)
 
         async for chunk in await client.aio.models.generate_content_stream(

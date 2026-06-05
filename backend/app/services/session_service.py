@@ -27,6 +27,14 @@ class SessionService:
         logger.debug("Active clause set [%s] → %s", session_id, active_clause_id)
         return updated
 
+    def set_selected_clauses(self, session_id: str, selected_clause_ids: list[str]) -> Session:
+        ids = [c for c in (selected_clause_ids or []) if c]
+        updated = session_repository.update(session_id, selected_clause_ids=ids)
+        if not updated:
+            raise SessionNotFoundError(session_id)
+        logger.debug("Selected clauses set [%s] → %s", session_id, ",".join(ids) or "(none)")
+        return updated
+
     def add_debug_log(self, session_id: str, entry: str) -> None:
         session = session_repository.get(session_id)
         if session:

@@ -75,7 +75,26 @@ class ConversationAgent:
                 yield event
             return
 
-        # 2. Arabic — route Arabic (or "explain in Arabic") questions to the
+        # 2. Selected (multiple) clauses — persists for the whole panel session.
+        #    Explicit ("explain these clauses", "write a message about these") OR a
+        #    follow-up that reuses the selection ("explain them again", "easier",
+        #    "what about them", "both", "compare"). Uses session.selected_clause_ids
+        #    (NOT all risks). Handles English + Arabic; runs before generic paths.
+        selected_ids = [
+            cid for cid in (getattr(session, "selected_clause_ids", None) or [])
+            if fp._find(report, cid)
+        ] if report else []
+        if report and len(selected_ids) >= 1:
+            explicit = fp.wants_selected(user_text)
+            followup = fp.selected_followup(user_text)
+            if explicit or followup:
+                async for event in self._handle_selected_clauses(
+                    user_text, session, selected_ids, reused=(followup and not explicit)
+                ):
+                    yield event
+                return
+
+        # 3. Arabic — route Arabic (or "explain in Arabic") questions to the
         #    Arabic-aware handler: same fast-path intents, answered in Arabic.
         if report and fp.detect_language(user_text) == "ar":
             async for event in self._handle_arabic_routed(user_text, session):
@@ -145,7 +164,7 @@ class ConversationAgent:
         intent = intent_result.intent.value
 
         if intent == "generate_message":
-            async for event in self._handle_generate_message(intent_result, session):
+            async for event in self._handle_generate_message(intent_result, session, user_text):
                 yield event
         elif intent == "explain_clause":
             async for event in self._handle_explain_clause(intent_result, session):
@@ -195,7 +214,7 @@ class ConversationAgent:
                        + (f" extra='{extra}'" if extra else ""),
             }
             intent = _FastIntent(format=fmt, extra_instruction=extra)
-            async for event in self._handle_generate_message(intent, session):
+            async for event in self._handle_generate_message(intent, session, user_text):
                 yield event
             return
 
@@ -265,7 +284,9 @@ class ConversationAgent:
 
     # ── Tool handlers ─────────────────────────────────────────────────────────
 
-    async def _handle_generate_message(self, intent_result, session):
+    async def _handle_generate_message(self, intent_result, session, user_text: str = ""):
+        from protectme_agent import fast_path as fp
+
         clause_ids = list(intent_result.target_clause_ids)
         if not clause_ids and session.active_clause_id:
             clause_ids = [session.active_clause_id]
@@ -283,16 +304,42 @@ class ConversationAgent:
 
         message_type = intent_result.message_type or "clarification"
         tone = intent_result.tone or "professional"
-        fmt = intent_result.format or "email"
-        extra_instruction = getattr(intent_result, "extra_instruction", None)
+        # Format/length/language are taken from the user's ACTUAL words when present
+        # (the router sometimes guesses email; the user's "whatsapp"/"قصيرة" wins).
+        lang = fp.detect_language(user_text) if user_text else "en"
+        fmt = (
+            (fp.detect_message_format(user_text) if user_text else None)
+            or intent_result.format
+            or "email"
+        )
+
+        # Build a rich instruction that PRESERVES the user's exact request + details
+        # (names, animals, amounts, dates, waiver/exemption asks) so the draft is
+        # never a generic template.
+        directives: list[str] = []
+        if lang == "ar":
+            directives.append("Write the entire message in Arabic (العربية), simple and natural.")
+        short_hint = fp.message_extra_instruction(user_text) if user_text else None
+        if short_hint:
+            directives.append(short_hint)
+        if user_text and user_text.strip():
+            directives.append(
+                f'The user asked: "{user_text.strip()}". Write the message to fulfill THIS '
+                "specific request. Include every concrete detail they mentioned (names, "
+                "animals, items, amounts, dates) and exactly what they want (e.g. a waiver, "
+                "exemption, discount, extension, or clarification). Do not write a generic message."
+            )
+        else:
+            directives.append(getattr(intent_result, "extra_instruction", None) or "")
+        extra_instruction = " ".join(d for d in directives if d) or None
 
         yield {"type": "status", "state": "tool_running", "label": "Writing your message..."}
         yield {
             "type": "debug",
             "log": (
                 f"[GenerateMessageTool] type={message_type} tone={tone} "
-                f"format={fmt} clauses={clause_ids}"
-                + (f" extra='{extra_instruction}'" if extra_instruction else "")
+                f"format={fmt} lang={lang} clauses={clause_ids}"
+                + (f" request=\"{user_text.strip()[:60]}\"" if user_text else "")
             ),
         }
 
@@ -510,6 +557,67 @@ class ConversationAgent:
         async for event in self._stream_gemini_answer(user_text, session, extra):
             yield event
 
+    # ── Selected (multiple) clauses (Phase 8H bugfix) ─────────────────────────
+
+    async def _handle_selected_clauses(self, user_text: str, session, selected_ids: list, reused: bool = False):
+        """Answer about ONLY the selected clauses (explain or generate a message),
+        in English or Arabic. selected_ids is already filtered to ids in the report.
+        reused=True when this turn reused the selection via a follow-up phrase."""
+        from protectme_agent import fast_path as fp
+
+        lang = fp.detect_language(user_text)
+        yield {"type": "debug", "log": f"[Voice] selected clauses loaded: {','.join(selected_ids)}"}
+        yield {"type": "debug", "log": "[Session] selected_clause_ids retained"}
+        if reused:
+            yield {"type": "debug", "log": "[FastPath] selected clauses context reused"}
+
+        # Generate a message about the selected clauses ("write a message about these").
+        if fp.wants_generate(user_text):
+            yield {"type": "debug", "log": f"[FastPath] generate_message using selected {','.join(selected_ids)}"}
+            fmt = fp.detect_message_format(user_text)
+            extra_bits: list[str] = []
+            if lang == "ar":
+                extra_bits.append("Write the entire message in Arabic (العربية).")
+            mi = fp.message_extra_instruction(user_text)
+            if mi:
+                extra_bits.append(mi)
+            intent = _FastIntent(
+                target_clause_ids=list(selected_ids),
+                format=fmt,
+                extra_instruction=" ".join(extra_bits) or None,
+            )
+            async for event in self._handle_generate_message(intent, session, user_text):
+                yield event
+            return
+
+        yield {"type": "debug", "log": f"[FastPath] explain_selected_clauses using {','.join(selected_ids)}"}
+
+        if lang == "ar":
+            # Arabic: focus the fast model on exactly the selected clauses' data.
+            report = session.risk_report or {}
+            lines = []
+            for i, cid in enumerate(selected_ids, start=1):
+                r = fp._find(report, cid) or {}
+                lines.append(
+                    f"{i}) {r.get('title', '')}: {r.get('simple_explanation', '')} "
+                    f"({r.get('why_it_matters', '')})"
+                )
+            data = " | ".join(lines)
+            extra = self._arabic_extra_system(None, session) + (
+                " ركّز فقط على البنود المحددة التالية واشرح كلًا منها باختصار ثم لماذا تهم معًا: "
+                + data
+            )
+            async for event in self._stream_gemini_answer(user_text, session, extra):
+                yield event
+            return
+
+        # English: deterministic structured answer (no Gemini).
+        ans = fp.build_selected_clauses_answer(session.risk_report, selected_ids)
+        for sentence in (ans if isinstance(ans, list) else [ans]):
+            if sentence and sentence.strip():
+                yield {"type": "sentence", "text": sentence.strip()}
+        yield {"type": "status", "state": "idle", "label": "Ready"}
+
     # ── Arabic (Phase 8H) ─────────────────────────────────────────────────────
 
     async def _handle_arabic_routed(self, user_text: str, session):
@@ -534,7 +642,7 @@ class ConversationAgent:
             if mi:
                 extra_bits.append(mi)
             intent = _FastIntent(format=fmt, extra_instruction=" ".join(extra_bits))
-            async for event in self._handle_generate_message(intent, session):
+            async for event in self._handle_generate_message(intent, session, user_text):
                 yield event
             return
 
@@ -693,6 +801,35 @@ class ConversationAgent:
                     lines.append(
                         f"Currently focused clause ({session.active_clause_id}): "
                         f"\"{active.get('title', '')}\" — {active.get('simple_explanation', '')}"
+                    )
+
+            # Conversation memory: the clauses the user selected for this session.
+            sel_ids = [
+                cid for cid in (getattr(session, "selected_clause_ids", None) or [])
+                if next((r for r in risks if r.get("id") == cid), None)
+            ]
+            if sel_ids:
+                sel_titles = [
+                    next((r.get("title", "") for r in risks if r.get("id") == cid), "")
+                    for cid in sel_ids
+                ]
+                lines.append(
+                    f"User-selected clauses ({len(sel_ids)}): "
+                    + "; ".join(f"{cid} \"{t}\"" for cid, t in zip(sel_ids, sel_titles))
+                )
+
+            # Conversation memory: the most recent message draft (so follow-ups
+            # like "make it more formal" or questions about it have context).
+            drafts = getattr(session, "generated_messages", None) or []
+            if drafts:
+                last = drafts[-1]
+                def _g(o, k):
+                    return getattr(o, k, None) if not isinstance(o, dict) else o.get(k)
+                d_fmt = _g(last, "format") or "message"
+                d_text = (_g(last, "draft") or "").strip().replace("\n", " ")
+                if d_text:
+                    lines.append(
+                        f"Latest draft ({d_fmt}, {len(d_text)} chars): \"{d_text[:160]}…\""
                     )
 
             rec_qs = [q for q in rr.get("recommended_questions", []) if q][:3]

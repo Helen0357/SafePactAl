@@ -14,6 +14,8 @@ interface VoicePanelProps {
   sessionId: string;
   riskReport: RiskReport;
   initialClauseId?: string | null;
+  /** Risk IDs the user selected before clicking "Call Your Agent" (multi-clause). */
+  selectedClauseIds?: string[];
   onClose: () => void;
   onDebugLine: (kind: DebugLine["kind"], text: string) => void;
   /**
@@ -22,6 +24,8 @@ interface VoicePanelProps {
    */
   useLive?: boolean;
 }
+
+type MicLang = "en-US" | "ar-SA";
 
 type WsState = "connecting" | "open" | "closed" | "error";
 
@@ -79,6 +83,43 @@ interface AudioChunkEntry {
   text: string; // chunk text (drives live caption when available)
   duration_ms: number;
   turn_id: number;
+  // Web Audio: undefined = not decoded yet, AudioBuffer = ready, null = decode failed.
+  buffer?: AudioBuffer | null;
+}
+
+type MicPhase =
+  | "ready"
+  | "listening"
+  | "heard"
+  | "processing"
+  | "no-speech"
+  | "error";
+
+interface MicDiag {
+  language: string;
+  permission: string;
+  status: string;
+  lastInterim: string;
+  lastFinal: string;
+  lastError: string;
+}
+
+const MIC_PHASE_LABEL: Record<MicPhase, string> = {
+  ready: "Mic ready",
+  listening: "Listening…",
+  heard: "Heard voice…",
+  processing: "Processing speech…",
+  "no-speech": "No speech detected — try again",
+  error: "Mic error — try again",
+};
+
+const LOOKAHEAD_S = 0.1; // 100ms schedule lookahead for gapless Web Audio playback
+
+function base64ToArrayBuffer(b64: string): ArrayBuffer {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
 }
 
 function estimateDurationMs(text: string): number {
@@ -119,10 +160,24 @@ export function VoicePanel({
   sessionId,
   riskReport,
   initialClauseId,
+  selectedClauseIds = [],
   onClose,
   onDebugLine,
   useLive = false,
 }: VoicePanelProps) {
+  const [micLang, setMicLang] = useState<MicLang>("en-US"); // mic recognition locale
+  const [micLangUnsupported, setMicLangUnsupported] = useState(false);
+  const [micPhase, setMicPhase] = useState<MicPhase>("ready");
+  const [interimText, setInterimText] = useState(""); // live partial transcript
+  const [showMicDiag, setShowMicDiag] = useState(false);
+  const [micDiag, setMicDiag] = useState<MicDiag>({
+    language: "en-US",
+    permission: "unknown",
+    status: "idle",
+    lastInterim: "",
+    lastFinal: "",
+    lastError: "",
+  });
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("idle");
   const [statusLabel, setStatusLabel] = useState("Connecting…");
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
@@ -178,10 +233,15 @@ export function VoicePanel({
   const audioQueueRef = useRef<Map<number, AudioChunkEntry>>(new Map());
   const nextSeqRef = useRef(0);
   const isPlayingRef = useRef(false);
-  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const currentTurnIdRef = useRef<number>(0);
   // Seqs whose TTS failed/timed out — skipped so a gap never stalls the queue.
   const failedSeqsRef = useRef<Set<number>>(new Set());
+
+  // ── Web Audio gapless playback ─────────────────────────────────────────────
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const nextStartTimeRef = useRef(0); // AudioContext time the next buffer starts
+  const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const turnSpeakingRef = useRef<number>(-1); // turn we've already flipped to "speaking"
 
   // ── Live caption refs ────────────────────────────────────────────────────
   const growingTextRef = useRef("");
@@ -222,98 +282,174 @@ export function VoicePanel({
     setGrowingText(null);
   }, []);
 
-  // ── Audio playback ───────────────────────────────────────────────────────
-  const playNextChunk = useCallback(() => {
-    if (isMutedRef.current) {
-      isPlayingRef.current = false;
-      return;
+  // ── Audio playback (Web Audio API — gapless, scheduled buffers) ────────────
+  const ensureCtx = useCallback((): AudioContext | null => {
+    if (!audioCtxRef.current) {
+      const AC =
+        (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AC) return null;
+      try {
+        audioCtxRef.current = new AC();
+      } catch {
+        return null;
+      }
     }
-    // Skip past any seqs whose TTS failed/timed out so the gap doesn't stall
-    // the queue (later chunks that DID synthesize must still play).
-    while (
-      !audioQueueRef.current.has(nextSeqRef.current) &&
-      failedSeqsRef.current.has(nextSeqRef.current)
+    if (audioCtxRef.current!.state === "suspended") {
+      audioCtxRef.current!.resume().catch(() => {});
+    }
+    return audioCtxRef.current;
+  }, []);
+
+  const maybeGoIdle = useCallback(() => {
+    // Idle only when nothing is scheduled/playing AND the next chunk isn't here.
+    if (
+      activeSourcesRef.current.size > 0 ||
+      audioQueueRef.current.has(nextSeqRef.current)
     ) {
-      failedSeqsRef.current.delete(nextSeqRef.current);
-      nextSeqRef.current += 1;
-    }
-    const entry = audioQueueRef.current.get(nextSeqRef.current);
-    if (!entry) {
-      // Queue drained. If the backend already signalled audio_done, the turn's
-      // playback has truly finished → go idle and finalize the caption once.
-      isPlayingRef.current = false;
-      // Idle when the turn's audio is truly done: either the backend sent
-      // audio_done, or this was the greeting (turn 0, single chunk, no audio_done).
-      if (audioDoneRef.current || lastPlayedTurnRef.current === 0) {
-        audioDoneRef.current = false;
-        finalizeGrowingText();
-        setVoiceStatus("idle");
-        setStatusLabel("Ready");
-      }
       return;
     }
-    audioQueueRef.current.delete(nextSeqRef.current);
-    nextSeqRef.current += 1;
+    isPlayingRef.current = false;
+    // Turn audio is truly finished: backend sent audio_done, or it was the
+    // greeting (turn 0, no audio_done).
+    if (audioDoneRef.current || lastPlayedTurnRef.current === 0) {
+      audioDoneRef.current = false;
+      finalizeGrowingText();
+      setVoiceStatus("idle");
+      setStatusLabel("Ready");
+    }
+  }, [finalizeGrowingText]);
 
-    const { audio, text, duration_ms, turn_id } = entry;
-    const isGreeting = turn_id === 0;
-    lastPlayedTurnRef.current = turn_id;
+  // Schedule every consecutive decoded chunk back-to-back so there are no gaps
+  // or clicks between sentences. Called when a chunk finishes decoding, when a
+  // tts_error unblocks a gap, and when a source ends.
+  const scheduleAvailable = useCallback(() => {
+    if (isMutedRef.current) return;
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
 
-    // New agent turn: finalize previous growing bubble (skip for the greeting,
-    // which is rendered as a static transcript entry, not a growing caption).
-    if (!isGreeting && growingTurnIdRef.current !== turn_id) {
-      if (growingTextRef.current.length > 0) {
-        const prevText = growingTextRef.current;
-        setTranscript((prev) => [
-          ...prev,
-          { role: "agent", text: prevText, kind: "text" },
-        ]);
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      // Skip seqs whose TTS failed/timed out (so a gap never stalls the queue).
+      while (
+        !audioQueueRef.current.has(nextSeqRef.current) &&
+        failedSeqsRef.current.has(nextSeqRef.current)
+      ) {
+        failedSeqsRef.current.delete(nextSeqRef.current);
+        nextSeqRef.current += 1;
       }
-      growingTextRef.current = "";
-      growingTurnIdRef.current = turn_id;
-      setGrowingText("");
-    }
+      const entry = audioQueueRef.current.get(nextSeqRef.current);
+      if (!entry) {
+        maybeGoIdle(); // gap (awaiting a chunk) or fully drained
+        return;
+      }
+      if (entry.buffer === undefined) {
+        return; // next chunk not decoded yet — its decode callback re-invokes us
+      }
+      // Consume this seq.
+      audioQueueRef.current.delete(nextSeqRef.current);
+      nextSeqRef.current += 1;
 
-    // Reveal words progressively (audio drives the live caption). Not for the
-    // greeting (already shown) — that would duplicate it.
-    if (text && !isGreeting) {
-      const dur = duration_ms > 0 ? duration_ms : estimateDurationMs(text);
-      revealWords(text, dur, turn_id);
-    }
+      const { buffer, text, duration_ms, turn_id } = entry;
+      const isGreeting = turn_id === 0;
+      lastPlayedTurnRef.current = turn_id;
 
-    const el = new Audio(`data:audio/wav;base64,${audio}`);
-    currentAudioRef.current = el;
-    isPlayingRef.current = true;
-    // "speaking" reflects REAL playback — set it the moment audio actually starts.
-    el.onplay = () => {
-      setVoiceStatus("speaking");
-      setStatusLabel("Speaking…");
-    };
-    el.onended = () => {
-      currentAudioRef.current = null;
-      playNextChunk();
-    };
-    el.onerror = () => {
-      currentAudioRef.current = null;
-      // TTS failed for this chunk → show its text once as a fallback.
+      // New agent turn: finalize the previous growing caption (not for greeting).
+      if (!isGreeting && growingTurnIdRef.current !== turn_id) {
+        if (growingTextRef.current.length > 0) {
+          const prevText = growingTextRef.current;
+          setTranscript((prev) => [
+            ...prev,
+            { role: "agent", text: prevText, kind: "text" },
+          ]);
+        }
+        growingTextRef.current = "";
+        growingTurnIdRef.current = turn_id;
+        setGrowingText("");
+      }
+
+      if (buffer === null) {
+        // Decode failed → show this chunk's text as a fallback and continue.
+        if (text && !isGreeting) {
+          const sep = growingTextRef.current.length > 0 ? " " : "";
+          growingTextRef.current += sep + text.trim();
+          setGrowingText(growingTextRef.current);
+        }
+        continue;
+      }
+
+      const startAt = Math.max(
+        ctx.currentTime + LOOKAHEAD_S,
+        nextStartTimeRef.current,
+      );
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(ctx.destination);
+      activeSourcesRef.current.add(src);
+      isPlayingRef.current = true;
+
+      const delayMs = Math.max(0, (startAt - ctx.currentTime) * 1000);
+      // Reveal the caption aligned to when this chunk actually starts.
       if (text && !isGreeting) {
-        const sep = growingTextRef.current.length > 0 ? " " : "";
-        growingTextRef.current += sep + text.trim();
-        setGrowingText(growingTextRef.current);
+        const dur = duration_ms > 0 ? duration_ms : Math.round(buffer.duration * 1000);
+        const rt = setTimeout(() => revealWords(text, dur, turn_id), delayMs);
+        revealTimersRef.current.push(rt);
       }
-      playNextChunk();
-    };
-    el.play().catch(() => {
-      isPlayingRef.current = false;
-    });
-  }, [revealWords, finalizeGrowingText]);
+      // Flip to "speaking" once per turn, when its first chunk starts.
+      if (turnSpeakingRef.current !== turn_id) {
+        turnSpeakingRef.current = turn_id;
+        const st = setTimeout(() => {
+          if (currentTurnIdRef.current === turn_id || isGreeting) {
+            setVoiceStatus("speaking");
+            setStatusLabel("Speaking…");
+          }
+        }, delayMs);
+        revealTimersRef.current.push(st);
+      }
+
+      src.onended = () => {
+        activeSourcesRef.current.delete(src);
+        if (activeSourcesRef.current.size === 0) maybeGoIdle();
+      };
+      src.start(startAt);
+      nextStartTimeRef.current = startAt + buffer.duration;
+    }
+  }, [revealWords, maybeGoIdle]);
+
+  // Decode an incoming chunk (in parallel) then try to schedule.
+  const ingestChunk = useCallback(
+    (seq: number, entry: AudioChunkEntry) => {
+      audioQueueRef.current.set(seq, entry);
+      const ctx = ensureCtx();
+      if (!ctx) {
+        entry.buffer = null; // no Web Audio → text fallback
+        scheduleAvailable();
+        return;
+      }
+      ctx
+        .decodeAudioData(base64ToArrayBuffer(entry.audio))
+        .then((buf) => {
+          entry.buffer = buf;
+        })
+        .catch(() => {
+          entry.buffer = null;
+        })
+        .finally(() => scheduleAvailable());
+    },
+    [ensureCtx, scheduleAvailable],
+  );
 
   const stopAudio = useCallback(() => {
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current.src = "";
-      currentAudioRef.current = null;
-    }
+    activeSourcesRef.current.forEach((s) => {
+      try {
+        s.onended = null;
+        s.stop();
+      } catch {
+        /* already stopped */
+      }
+    });
+    activeSourcesRef.current.clear();
+    nextStartTimeRef.current = 0;
+    turnSpeakingRef.current = -1;
     audioQueueRef.current.clear();
     failedSeqsRef.current.clear();
     nextSeqRef.current = 0;
@@ -331,6 +467,18 @@ export function VoicePanel({
     nextSeqRef.current = 0;
     audioDoneRef.current = false;
   }, [stopAudio]);
+
+  // Close the AudioContext when the panel unmounts.
+  useEffect(() => {
+    return () => {
+      try {
+        audioCtxRef.current?.close();
+      } catch {
+        /* already closed */
+      }
+      audioCtxRef.current = null;
+    };
+  }, []);
 
   // ── No-audio → Journey TTS auto-fallback ───────────────────────────────────
   const clearNoAudioTimer = useCallback(() => {
@@ -597,23 +745,25 @@ export function VoicePanel({
           `audio_chunk seq=${seq} turn=${chunkTurnId} ${ev.duration_ms ?? "?"}ms`,
         );
         if (!isMutedRef.current) {
-          audioQueueRef.current.set(seq, {
+          ingestChunk(seq, {
             audio: ev.audio ?? "",
             text: ev.text ?? "",
             duration_ms: ev.duration_ms ?? 0,
             turn_id: chunkTurnId,
           });
-          if (!isPlayingRef.current) playNextChunk();
         }
         break;
       }
 
       case "audio_done":
         onDebugLine("info", `audio_done turn=${ev.turn_id ?? "?"}`);
-        // Mark end-of-turn audio. If playback already drained, go idle now;
-        // otherwise playNextChunk flips to idle when the last chunk ends.
+        // Mark end-of-turn audio. If nothing is scheduled/decoding, go idle now;
+        // otherwise the last source's onended → maybeGoIdle flips to idle.
         audioDoneRef.current = true;
-        if (!isPlayingRef.current && audioQueueRef.current.size === 0) {
+        if (
+          activeSourcesRef.current.size === 0 &&
+          audioQueueRef.current.size === 0
+        ) {
           audioDoneRef.current = false;
           finalizeGrowingText();
           if (!liveMode) {
@@ -644,8 +794,8 @@ export function VoicePanel({
         } else if (errText) {
           addEntry({ role: "agent", text: errText.trim(), kind: "text" });
         }
-        // Resume playback if we were stalled waiting on this seq.
-        if (!isPlayingRef.current && !isMutedRef.current) playNextChunk();
+        // Unblock the scheduler if it was waiting on this seq.
+        if (!isMutedRef.current) scheduleAvailable();
         onDebugLine(
           "error",
           `[TTS] seq=${errSeq}: ${ev.message ?? "TTS failed"}`,
@@ -848,42 +998,140 @@ export function VoicePanel({
 
   const startListening = useCallback(() => {
     if (!hasSR || liveMode) return;
-    if (isListening || srRef.current) return;
+    // Guard against duplicate starts (double-click / re-render).
+    if (isListening || srRef.current) {
+      onDebugLine("info", "[Speech] already listening (duplicate start ignored)");
+      return;
+    }
+    // Stop the agent's own audio FIRST so the browser STT isn't confused by it.
+    stopAll();
+
     const SR =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
     const sr = new SR();
     sr.continuous = false;
-    sr.interimResults = false;
-    sr.lang = "en-US";
+    sr.interimResults = true; // stream partial words while the user speaks
+    sr.maxAlternatives = 1;
+    sr.lang = micLang; // "en-US" or "ar-SA" depending on the Mic Language toggle
+
+    setMicLangUnsupported(false);
+    setInterimText("");
+    setMicPhase("listening");
+    setMicDiag((d) => ({ ...d, language: micLang, status: "starting", lastError: "" }));
+
+    sr.onstart = () => {
+      setMicDiag((d) => ({ ...d, status: "listening", permission: "granted" }));
+      onDebugLine("info", "[Speech] permission=granted");
+      onDebugLine("info", "[Speech] started");
+    };
+    sr.onspeechstart = () => {
+      setMicPhase("heard");
+      setMicDiag((d) => ({ ...d, status: "speech detected" }));
+    };
     sr.onresult = (e: any) => {
-      const text: string = e.results[0][0].transcript;
-      setIsListening(false);
-      setVoiceStatus("thinking");
-      sendMessage(text, "transcript");
-      onDebugLine("info", `Speech: "${text}"`);
+      let interim = "";
+      let final = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const tr: string = e.results[i][0].transcript;
+        if (e.results[i].isFinal) final += tr;
+        else interim += tr;
+      }
+      if (interim) {
+        setInterimText(interim);
+        setMicPhase("heard");
+        setMicDiag((d) => ({ ...d, lastInterim: interim }));
+        onDebugLine("info", `[Speech] interim: ${interim}`);
+      }
+      if (final.trim()) {
+        const text = final.trim();
+        setInterimText("");
+        setMicPhase("processing");
+        setIsListening(false);
+        setVoiceStatus("thinking");
+        setMicDiag((d) => ({ ...d, lastFinal: text, status: "final" }));
+        onDebugLine("info", `[Speech] final: ${text}`);
+        sendMessage(text, "transcript");
+      }
+    };
+    sr.onnomatch = () => {
+      setMicPhase("no-speech");
+      onDebugLine("error", "[Speech] error=no-match");
     };
     sr.onerror = (e: any) => {
+      const err = String(e.error || "unknown");
       setIsListening(false);
-      setVoiceStatus("idle");
-      onDebugLine("error", `SpeechRecognition: ${e.error}`);
+      setInterimText("");
+      setMicDiag((d) => ({ ...d, lastError: err, status: `error:${err}` }));
+      onDebugLine("error", `[Speech] error=${err}`);
+      if (err === "no-speech") {
+        setMicPhase("no-speech");
+        setVoiceStatus("idle");
+        setStatusLabel("Ready");
+        addEntry({
+          role: "agent",
+          text: "I didn’t catch that. Please try again or type your question.",
+          kind: "error",
+        });
+      } else if (err === "not-allowed" || err === "service-not-allowed") {
+        setMicPhase("error");
+        setVoiceStatus("idle");
+        setMicDiag((d) => ({ ...d, permission: "denied" }));
+        addEntry({
+          role: "agent",
+          text: "Microphone permission is blocked. Please allow the mic, or type your question.",
+          kind: "error",
+        });
+      } else if (micLang !== "en-US" && /language/i.test(err)) {
+        setMicLangUnsupported(true);
+        setMicPhase("error");
+        setVoiceStatus("idle");
+      } else {
+        setMicPhase("error");
+        setVoiceStatus("idle");
+      }
     };
     sr.onend = () => {
       setIsListening(false);
       srRef.current = null;
+      setMicDiag((d) => ({ ...d, status: "ended" }));
+      onDebugLine("info", "[Speech] ended");
+      // Keep a terminal phase (processing/no-speech/error) visible; else reset.
+      setMicPhase((p) =>
+        p === "processing" || p === "no-speech" || p === "error" ? p : "ready",
+      );
     };
+
     srRef.current = sr;
-    stopAll();
-    sr.start();
+    try {
+      sr.start();
+    } catch (err: any) {
+      srRef.current = null;
+      setIsListening(false);
+      setMicPhase("error");
+      onDebugLine("error", `[Speech] start failed: ${err?.message ?? err}`);
+      return;
+    }
     setIsListening(true);
     setVoiceStatus("listening");
-    onDebugLine("info", "Listening started");
-  }, [hasSR, liveMode, sendMessage, stopAll, onDebugLine]);
+    onDebugLine("info", `[Speech] recognition language=${micLang}`);
+  }, [
+    hasSR,
+    liveMode,
+    isListening,
+    micLang,
+    sendMessage,
+    stopAll,
+    onDebugLine,
+    addEntry,
+  ]);
 
   const stopListening = useCallback(() => {
     srRef.current?.stop();
     srRef.current = null;
     setIsListening(false);
+    setInterimText("");
+    setMicPhase("ready");
     setVoiceStatus("idle");
   }, []);
 
@@ -939,6 +1187,18 @@ export function VoicePanel({
         isMicActive ? stopListening() : startListening();
       };
   const canShowMic = liveMode || hasSR;
+
+  // Header context: multiple selected clauses → "N selected clauses";
+  // otherwise the single focused clause title (if any).
+  const activeRisk = initialClauseId
+    ? riskReport.risks.find((r) => r.id === initialClauseId)
+    : null;
+  const headerContext =
+    selectedClauseIds.length >= 2
+      ? `${selectedClauseIds.length} selected clauses`
+      : activeRisk
+        ? activeRisk.title
+        : null;
   return (
     <div className="flex flex-col h-full bg-white relative animate-in slide-in-from-right duration-500 ">
       <div className="p-4 px-6 border-b border-slate-100 flex items-center justify-between ">
@@ -950,8 +1210,11 @@ export function VoicePanel({
             <h2 className="text-base font-black text-[#2e2e2e] tracking-tight">
               Legal Assistant
             </h2>{" "}
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-              Neural Audio Session
+            <p
+              className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate max-w-[200px]"
+              title={headerContext ?? undefined}
+            >
+              {headerContext ?? "Neural Audio Session"}
             </p>
           </div>
         </div>
@@ -1097,6 +1360,83 @@ export function VoicePanel({
       </div>
 
       <div className="p-6 bg-white border-t border-slate-50 space-y-4">
+        {!liveMode && hasSR && (
+          <div className="flex flex-col items-center gap-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                Mic Language
+              </span>
+              <div className="flex rounded-full bg-slate-100 p-0.5">
+                {(["en-US", "ar-SA"] as MicLang[]).map((lng) => (
+                  <button
+                    key={lng}
+                    type="button"
+                    onClick={() => {
+                      setMicLang(lng);
+                      setMicLangUnsupported(false);
+                      onDebugLine("info", `[Speech] recognition language=${lng}`);
+                    }}
+                    className={`px-3 py-1 text-[11px] font-bold rounded-full transition-all ${
+                      micLang === lng
+                        ? "bg-white text-[#67a1ff] shadow-sm"
+                        : "text-slate-400 hover:text-slate-600"
+                    }`}
+                  >
+                    {lng === "en-US" ? "English" : "Arabic"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {micLang !== "en-US" && micLangUnsupported && (
+              <p className="text-[10px] text-amber-600 text-center max-w-[260px] leading-snug">
+                Arabic voice input may not be supported in this browser. Please
+                type Arabic instead.
+              </p>
+            )}
+
+            {/* Live mic phase + interim transcript preview */}
+            <div className="flex flex-col items-center gap-0.5 min-h-[16px]">
+              <span
+                className={`text-[10px] font-bold ${
+                  micPhase === "error" || micPhase === "no-speech"
+                    ? "text-amber-600"
+                    : micPhase === "listening" || micPhase === "heard"
+                      ? "text-[#67a1ff]"
+                      : "text-slate-400"
+                }`}
+              >
+                {MIC_PHASE_LABEL[micPhase]}
+              </span>
+              {interimText && (
+                <span
+                  dir="auto"
+                  className="text-[11px] text-slate-500 italic text-center max-w-[280px] truncate"
+                >
+                  Heard: {interimText}…
+                </span>
+              )}
+            </div>
+
+            {/* Mic diagnostics (debug) */}
+            <button
+              type="button"
+              onClick={() => setShowMicDiag((v) => !v)}
+              className="text-[9px] text-slate-300 hover:text-slate-500 uppercase tracking-widest font-bold"
+            >
+              {showMicDiag ? "hide mic diagnostics" : "mic diagnostics"}
+            </button>
+            {showMicDiag && (
+              <div className="w-full max-w-[300px] bg-slate-50 rounded-lg p-2 text-[10px] text-slate-500 font-mono space-y-0.5">
+                <div>language: {micDiag.language}</div>
+                <div>permission: {micDiag.permission}</div>
+                <div>status: {micDiag.status}</div>
+                <div className="truncate">last interim: {micDiag.lastInterim || "—"}</div>
+                <div className="truncate">last final: {micDiag.lastFinal || "—"}</div>
+                <div>last error: {micDiag.lastError || "—"}</div>
+              </div>
+            )}
+          </div>
+        )}
         <div className="flex items-center justify-center gap-3">
           <button
             onClick={handleMicClick}

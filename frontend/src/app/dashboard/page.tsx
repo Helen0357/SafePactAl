@@ -9,7 +9,7 @@ import { StatsGrid } from "@/components/dashboard/StatsGrid";
 import { VoicePanel } from "@/components/dashboard/VoicePanel";
 import { SeverityBadge } from "@/components/ui/SeverityBadge";
 import { Toast } from "@/components/ui/Toast";
-import { setActiveClause } from "@/lib/api";
+import { setActiveClause, setSelectedClauses } from "@/lib/api";
 import type { FilterTab, RiskItem, ToastData } from "@/lib/types";
 import { useStore } from "@/store/useStore";
 import { useRouter } from "next/navigation";
@@ -46,6 +46,24 @@ export default function DashboardPage() {
     if (!_hasHydrated) return;
     if (!sessionId || !riskReport) router.replace("/");
   }, [_hasHydrated, sessionId, riskReport, router]);
+
+  // Keep the backend's selected clauses in sync with the dashboard selection
+  // while a GENERAL voice panel is open (voiceClauseId === null). This makes the
+  // selection persist across turns AND update live when the user changes it.
+  // Single-clause panels (opened via "Ask agent" on a card) ignore selection.
+  useEffect(() => {
+    if (panelMode !== "voice" || voiceClauseId !== null || !sessionId) return;
+    setSelectedClauses(sessionId, selectedIds)
+      .then(() =>
+        addDebugLine(
+          "tool",
+          selectedIds.length
+            ? `[Session] selected_clause_ids set: ${selectedIds.join(",")}`
+            : "[Session] selected_clause_ids cleared",
+        ),
+      )
+      .catch(() => {});
+  }, [selectedIds, panelMode, voiceClauseId, sessionId, addDebugLine]);
 
   const showToast = useCallback((t: ToastData) => {
     setToast(t);
@@ -85,11 +103,14 @@ export default function DashboardPage() {
       if (alreadyOpen || rapidRepeat) return;
 
       addDebugLine("info", `Voice agent opened for: ${risk.title}`);
-      // Set the focused clause and WAIT for success BEFORE opening the panel,
-      // so "explain this clause" always answers about the selected risk.
+      // Single-clause flow: focus this clause and clear any prior multi-selection
+      // so "explain these clauses" can't leak a stale selection. Wait before open.
       if (sessionId) {
         try {
-          await setActiveClause(sessionId, risk.id);
+          await Promise.all([
+            setActiveClause(sessionId, risk.id),
+            setSelectedClauses(sessionId, []),
+          ]);
           addDebugLine("tool", `[Session] active_clause_id set: ${risk.id}`);
         } catch {
           addDebugLine("error", `Failed to set active clause: ${risk.id}`);
@@ -127,6 +148,9 @@ export default function DashboardPage() {
 
     addDebugLine("info", "Voice agent opened (action bar)");
 
+    // General call. Clear active_clause_id so a stale single-clause focus can't
+    // dominate. The selected clauses are synced (and kept in sync) by the effect
+    // below, which also handles the user changing the selection while open.
     if (sessionId) {
       try {
         await setActiveClause(sessionId, "");
@@ -222,6 +246,7 @@ export default function DashboardPage() {
                 sessionId={sessionId}
                 riskReport={riskReport}
                 initialClauseId={voiceClauseId}
+                selectedClauseIds={voiceClauseId ? [] : selectedIds}
                 onClose={closePanel}
                 onDebugLine={addDebugLine}
                 useLive={process.env.NEXT_PUBLIC_VOICE_MODE === "live"}

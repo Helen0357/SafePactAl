@@ -44,4 +44,14 @@ export async function setActiveClause(
   });
 }
 
+export async function setSelectedClauses(
+  sessionId: string,
+  clauseIds: string[],
+): Promise<void> {
+  await api.post("/api/session/selected-clauses", {
+    session_id: sessionId,
+    selected_clause_ids: clauseIds,
+  });
+}
+
 export { api };

@@ -176,6 +176,44 @@ def is_recommendation(user_text: str) -> bool:
     return bool(_RECOMMEND_RE.search(user_text or ""))
 
 
+# Refers to the multiple selected clauses ("explain these clauses", "compare
+# these", "write a message about these", and Arabic equivalents).
+_SELECTED_RE = re.compile(
+    r"\bthese (clauses?|two|three|risks?|ones|terms?|selected)\b"
+    r"|\bthe(se)? selected (clauses?|risks?|ones)\b"
+    r"|\bselected clauses?\b"
+    r"|\bboth (clauses?|risks?|of them|of these)\b|\bthese two\b"
+    r"|\bcompare (these|them|the (two|clauses|risks))\b"
+    r"|\b(about|on) these\b|\btell me about both\b"
+    r"|هذين البندين|هذين الشرطين|هذه البنود|البندين المحددين|البنود المحددة"
+    r"|كلا البندين|قارن بين|عن هذه البنود|هذين الاثنين",
+    re.IGNORECASE,
+)
+
+
+def wants_selected(user_text: str) -> bool:
+    return bool(_SELECTED_RE.search(user_text or ""))
+
+
+# Follow-up phrasings that should REUSE the active selection (only when a
+# selection is already in context): pronouns, "explain more/again/easier",
+# "what about them", "both", "compare", and Arabic equivalents.
+_SELECTED_FOLLOWUP_RE = re.compile(
+    r"\b(them|those|they)\b"
+    r"|\bexplain (it )?(more|again|further|better)\b"
+    r"|\b(easier|simpler|simplify|in (more )?detail|more detail|in depth)\b"
+    r"|\bwhat about (them|those|these|both)\b"
+    r"|\btell me more\b|\bmore about (them|those|these|both)\b"
+    r"|\bboth\b|\bcompare\b"
+    r"|اشرحهم|اشرح أكثر|وضح أكثر|بطريقة أسهل|أسهل|ماذا عنهم|كلاهما|كليهما|قارن|اشرح مرة أخرى",
+    re.IGNORECASE,
+)
+
+
+def selected_followup(user_text: str) -> bool:
+    return bool(_SELECTED_FOLLOWUP_RE.search(user_text or ""))
+
+
 # ── Arabic language support (Phase 8H) ───────────────────────────────────────
 # Lightweight, per-turn language detection + Arabic intent matching so Arabic
 # questions route to the same fast-path intents and answer from the risk_report.
@@ -400,6 +438,32 @@ def build_questions_answer(report: dict, active_id: Optional[str]):
         out.extend(_ensure_period(q) for q in qs[:3])
         return out
     return None
+
+
+_ORDINAL_NAMES = ["first", "second", "third", "fourth", "fifth", "sixth"]
+
+
+def build_selected_clauses_answer(report: dict, selected_ids: list):
+    """Deterministic, structured English answer about ONLY the selected clauses
+    (no Gemini): 'The first selected clause is X… The second is Y… Together…'."""
+    risks = [r for r in (_find(report, i) for i in (selected_ids or [])) if r]
+    if not risks:
+        return None
+    if len(risks) == 1:
+        return _explain_one(risks[0], lead="The selected clause is")
+    out: list[str] = []
+    for idx, r in enumerate(risks[:6]):
+        name = _ORDINAL_NAMES[idx] if idx < len(_ORDINAL_NAMES) else f"{idx + 1}th"
+        title = (r.get("title") or "this clause").strip()
+        se = (r.get("simple_explanation") or "").strip()
+        line = f"The {name} selected clause is {title}"
+        if se:
+            line += f" — {_lc_first(se)}"
+        out.append(_ensure_period(line))
+    out.append(
+        "Together, these terms are worth clarifying and confirming in writing before you sign."
+    )
+    return out
 
 
 def _explain_one(risk: dict, lead: str) -> list[str]:
