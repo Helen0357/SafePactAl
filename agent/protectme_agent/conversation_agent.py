@@ -85,6 +85,12 @@ class ConversationAgent:
                 yield event
             return
 
+        # Effective response language for this turn: the session/UI language
+        # (Arabic for an Arabic UI, even when the contract is English), unless the
+        # user explicitly asks otherwise this turn ("explain in English" / "بالعربي").
+        session_lang = fp.normalize_language(getattr(session, "language", "en"))
+        turn_lang = fp.resolve_response_language(user_text, session_lang)
+
         # 2. Selected (multiple) clauses — persists for the whole panel session.
         #    Explicit ("explain these clauses", "write a message about these") OR a
         #    follow-up that reuses the selection ("explain them again", "easier",
@@ -99,19 +105,21 @@ class ConversationAgent:
             followup = fp.selected_followup(user_text)
             if explicit or followup:
                 async for event in self._handle_selected_clauses(
-                    user_text, session, selected_ids, reused=(followup and not explicit)
+                    user_text, session, selected_ids,
+                    reused=(followup and not explicit), lang=turn_lang,
                 ):
                     yield event
                 return
 
-        # 3. Arabic — route Arabic (or "explain in Arabic") questions to the
-        #    Arabic-aware handler: same fast-path intents, answered in Arabic.
-        if report and fp.detect_language(user_text) == "ar":
+        # 3. Arabic — when the effective turn language is Arabic (Arabic UI, Arabic
+        #    text, or "explain in Arabic"), answer in Arabic via the Arabic-aware
+        #    handler (same intents, Arabic output) — even for an English contract.
+        if report and turn_lang == "ar":
             async for event in self._handle_arabic_routed(user_text, session):
                 yield event
             return
 
-        # 3. Explicit clause / risk number reference ("explain clause 6").
+        # 4. Explicit clause / risk number reference ("explain clause 6").
         #    Runs before the generic explain fast path so a number reference
         #    overrides any stale active clause.
         if report and fp.parse_clause_number(user_text) is not None:
@@ -294,7 +302,8 @@ class ConversationAgent:
 
     # ── Tool handlers ─────────────────────────────────────────────────────────
 
-    async def _handle_generate_message(self, intent_result, session, user_text: str = ""):
+    async def _handle_generate_message(self, intent_result, session, user_text: str = "",
+                                       lang_override: str = ""):
         from protectme_agent import fast_path as fp
 
         clause_ids = list(intent_result.target_clause_ids)
@@ -316,7 +325,9 @@ class ConversationAgent:
         tone = intent_result.tone or "professional"
         # Format/length/language are taken from the user's ACTUAL words when present
         # (the router sometimes guesses email; the user's "whatsapp"/"قصيرة" wins).
-        lang = fp.detect_language(user_text) if user_text else "en"
+        # lang_override (the session/turn language) wins when provided, so an Arabic
+        # UI produces an Arabic draft even when the user typed the request in English.
+        lang = lang_override or (fp.detect_language(user_text) if user_text else "en")
         fmt = (
             (fp.detect_message_format(user_text) if user_text else None)
             or intent_result.format
@@ -569,13 +580,15 @@ class ConversationAgent:
 
     # ── Selected (multiple) clauses (Phase 8H bugfix) ─────────────────────────
 
-    async def _handle_selected_clauses(self, user_text: str, session, selected_ids: list, reused: bool = False):
+    async def _handle_selected_clauses(self, user_text: str, session, selected_ids: list,
+                                       reused: bool = False, lang: str = ""):
         """Answer about ONLY the selected clauses (explain or generate a message),
         in English or Arabic. selected_ids is already filtered to ids in the report.
-        reused=True when this turn reused the selection via a follow-up phrase."""
+        reused=True when this turn reused the selection via a follow-up phrase.
+        lang is the effective turn language (falls back to detecting from the text)."""
         from protectme_agent import fast_path as fp
 
-        lang = fp.detect_language(user_text)
+        lang = lang or fp.detect_language(user_text)
         yield {"type": "debug", "log": f"[Voice] selected clauses loaded: {','.join(selected_ids)}"}
         yield {"type": "debug", "log": "[Session] selected_clause_ids retained"}
         if reused:
@@ -596,7 +609,7 @@ class ConversationAgent:
                 format=fmt,
                 extra_instruction=" ".join(extra_bits) or None,
             )
-            async for event in self._handle_generate_message(intent, session, user_text):
+            async for event in self._handle_generate_message(intent, session, user_text, lang_override=lang):
                 yield event
             return
 
@@ -652,7 +665,7 @@ class ConversationAgent:
             if mi:
                 extra_bits.append(mi)
             intent = _FastIntent(format=fmt, extra_instruction=" ".join(extra_bits))
-            async for event in self._handle_generate_message(intent, session, user_text):
+            async for event in self._handle_generate_message(intent, session, user_text, lang_override="ar"):
                 yield event
             return
 

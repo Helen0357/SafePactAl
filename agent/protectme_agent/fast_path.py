@@ -232,6 +232,34 @@ def wants_pdf(user_text: str) -> bool:
     return bool(_PDF_RE.search(user_text or ""))
 
 
+# ── Per-turn / session language (Phase 8I-i18n) ──────────────────────────────
+_ENGLISH_RE = re.compile(
+    r"\bin english\b|\benglish (please|language|version)\b|\bspeak english\b"
+    r"|\breply in english\b|\banswer in english\b"
+    r"|بالانجليزي|بالإنجليزي|بالإنجليزية|بالانجليزية|انجليزي|إنجليزي|بالانكليزي",
+    re.IGNORECASE,
+)
+
+
+def wants_english(user_text: str) -> bool:
+    return bool(_ENGLISH_RE.search(user_text or ""))
+
+
+def normalize_language(lang) -> str:
+    """Clamp any language value to the allowed set: 'ar' or 'en' (default 'en')."""
+    return "ar" if str(lang or "").strip().lower().startswith("ar") else "en"
+
+
+def resolve_response_language(user_text: str, session_lang: str = "en") -> str:
+    """Per-turn response language. An explicit request in the message wins
+    ('explain in English' / 'بالعربي'); otherwise use the session/UI language."""
+    if wants_english(user_text):
+        return "en"
+    if wants_arabic(user_text):
+        return "ar"
+    return normalize_language(session_lang)
+
+
 # ── Arabic language support (Phase 8H) ───────────────────────────────────────
 # Lightweight, per-turn language detection + Arabic intent matching so Arabic
 # questions route to the same fast-path intents and answer from the risk_report.

@@ -41,7 +41,7 @@ from app.services.session_service import session_service
 from protectme_agent.conversation_agent import ConversationAgent  # noqa: E402
 from protectme_agent.fast_path import (  # noqa: E402
     match_fast_path,
-    wants_arabic,
+    resolve_response_language,
     wants_modify,
     wants_pdf,
 )
@@ -231,11 +231,20 @@ def _build_gemini_client() -> GeminiClient:
 
 
 def _build_greeting(session) -> str:
+    lang = "ar" if str(getattr(session, "language", "en") or "").lower().startswith("ar") else "en"
     if not session.risk_report:
+        if lang == "ar":
+            return "مرحباً، كيف يمكنني مساعدتك في هذا العقد؟"
         return DISCLAIMER_VOICE_INTRO
     overall = session.risk_report.get("overall_risk", "")
     risk_count = len(session.risk_report.get("risks", []))
     contract_type = session.risk_report.get("contract_type", "your contract")
+    if lang == "ar":
+        # Arabic UI → Arabic greeting (the report's contract_type is already Arabic).
+        return (
+            f"مرحباً، لقد حلّلت {contract_type} ووجدت {risk_count} من المخاطر. "
+            "كيف يمكنني مساعدتك؟"
+        )
     greeting = (
         f"I can see you've analyzed {contract_type} with {risk_count} risk(s) "
         f"identified and an overall risk of {overall}. "
@@ -363,7 +372,7 @@ class VoiceService:
     """
 
     async def handle_voice_session(
-        self, session_id: str, websocket: WebSocket
+        self, session_id: str, websocket: WebSocket, language: str = "en"
     ) -> None:
         if not settings.is_gemini_configured:
             raise GeminiNotConfiguredError()
@@ -371,6 +380,10 @@ class VoiceService:
         if not session_repository.exists(session_id):
             raise SessionNotFoundError(session_id)
 
+        # Persist the UI language on the session so the agent defaults to it
+        # (Arabic voice for an Arabic UI, even when the contract is English).
+        _lang = "ar" if str(language or "").strip().lower().startswith("ar") else "en"
+        session_repository.update(session_id, language=_lang)
         session = session_repository.get(session_id)
         client = _build_gemini_client()
         agent = ConversationAgent(client)
@@ -507,9 +520,9 @@ class VoiceService:
             # through to Gemini get a neutral "Let me check that." so the user
             # hears something while the model thinks.
             # Arabic turns get an Arabic preamble (never an English one) so the
-            # spoken answer stays entirely in Arabic. It's synthesized with the
-            # Arabic voice automatically (it contains Arabic script).
-            if wants_arabic(user_text):
+            # spoken answer stays entirely in Arabic. Uses the effective turn
+            # language (Arabic UI, Arabic text, or "in Arabic" request).
+            if resolve_response_language(user_text, getattr(session, "language", "en")) == "ar":
                 preamble = "لحظة من فضلك."  # "one moment, please"
             else:
                 preamble = _select_preamble(user_text)

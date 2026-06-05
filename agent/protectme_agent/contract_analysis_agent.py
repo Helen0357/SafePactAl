@@ -76,17 +76,19 @@ class ContractAnalysisAgent:
     def __init__(self, gemini_client: "GeminiClient"):
         self.client = gemini_client
 
-    async def analyze(self, contract_text: str) -> RiskReport:
+    async def analyze(self, contract_text: str, language: str = "en") -> RiskReport:
         """
         Run the full analysis pipeline and return a validated RiskReport.
+        language='ar' makes the user-facing fields Arabic (enums stay English).
 
         Raises:
             ValueError: if JSON cannot be parsed even after repair.
             pydantic.ValidationError: if the parsed JSON doesn't match the schema.
         """
-        logger.info("[Agent] Contract analysis started — %d chars", len(contract_text))
+        logger.info("[Agent] Contract analysis started — %d chars (lang=%s)",
+                    len(contract_text), language)
 
-        prompt = build_analysis_prompt(contract_text)
+        prompt = build_analysis_prompt(contract_text, language=language)
 
         # ── Attempt 1: standard analysis ─────────────────────────────────────
         raw = await self.client.generate(

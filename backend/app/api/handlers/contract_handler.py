@@ -13,8 +13,11 @@ logger = logging.getLogger(__name__)
 async def handle_analyze_contract(
     file: Optional[UploadFile],
     text: Optional[str],
+    language: str = "en",
 ) -> AnalyzeResponse:
-    """Validate input, call contract_service, return AnalyzeResponse."""
+    """Validate input, call contract_service, return AnalyzeResponse.
+    language ('en'|'ar') comes from the X-Language header and controls whether the
+    user-facing risk fields are returned in Arabic."""
     if file is not None:
         content = await file.read()
         if not content:
@@ -25,11 +28,11 @@ async def handle_analyze_contract(
                 text_content = content.decode("utf-8")
             except UnicodeDecodeError:
                 text_content = content.decode("latin-1", errors="replace")
-            session = await contract_service.analyze_from_text(text_content)
+            session = await contract_service.analyze_from_text(text_content, language=language)
         else:
-            session = await contract_service.analyze_from_pdf(content, filename)
+            session = await contract_service.analyze_from_pdf(content, filename, language=language)
     elif text and text.strip():
-        session = await contract_service.analyze_from_text(text.strip())
+        session = await contract_service.analyze_from_text(text.strip(), language=language)
     else:
         raise HTTPException(
             status_code=400,

@@ -127,18 +127,21 @@ function estimateDurationMs(text: string): number {
   return Math.max(text.trim().split(/\s+/).length * 400, 600);
 }
 
-function getWsUrl(sessionId: string, useLive = false): string {
+function getWsUrl(sessionId: string, useLive = false, language = "en"): string {
   // Prefer an explicit WS base URL; otherwise derive it from the API base URL
   // (http→ws). Accepts NEXT_PUBLIC_WS_BASE_URL / NEXT_PUBLIC_API_BASE_URL and
-  // the legacy NEXT_PUBLIC_API_URL.
+  // the legacy NEXT_PUBLIC_API_URL. The UI language rides in the query string
+  // (browsers can't set custom WS headers).
   const wsBase = process.env.NEXT_PUBLIC_WS_BASE_URL;
   const apiBase =
     process.env.NEXT_PUBLIC_API_BASE_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
     "http://localhost:8001";
   const base = wsBase || apiBase.replace(/^http/, "ws");
+  const lang = language === "ar" ? "ar" : "en";
   return (
-    base.replace(/\/$/, "") + `/ws/${useLive ? "live" : "voice"}/${sessionId}`
+    base.replace(/\/$/, "") +
+    `/ws/${useLive ? "live" : "voice"}/${sessionId}?language=${lang}`
   );
 }
 
@@ -196,6 +199,12 @@ export function VoicePanel({
   const [micLevel, setMicLevel] = useState(0); // 0–1 RMS for level indicator
   const t = useTranslations("VoicePanel");
   const locale = useLocale();
+  // Default the mic recognition language to the UI language (Arabic UI → Arabic
+  // mic). The user can still toggle it manually; a manual choice persists because
+  // this only re-runs if the UI locale itself changes.
+  useEffect(() => {
+    setMicLang(locale === "ar" ? "ar-SA" : "en-US");
+  }, [locale]);
   // Effective transport mode. Starts from the useLive prop; auto-flips to TTS
   // (false) if Live produces no audio — the call keeps working either way.
   const [liveMode, setLiveMode] = useState(useLive);
@@ -880,7 +889,7 @@ export function VoicePanel({
     setWsState("connecting");
 
     const ws = buildWs(
-      getWsUrl(sessionId, mode),
+      getWsUrl(sessionId, mode, locale),
       () => {
         setWsState("open");
         setStatusLabel("Connected");
@@ -961,7 +970,7 @@ export function VoicePanel({
       ws.onerror = null;
       ws.close();
     };
-  }, [sessionId, reconnectKey, liveMode]);
+  }, [sessionId, reconnectKey, liveMode, locale]);
 
   const reconnect = useCallback(() => {
     currentTurnIdRef.current = 0;

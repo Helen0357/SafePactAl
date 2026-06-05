@@ -57,7 +57,7 @@ ANALYSIS_PROMPT_TEMPLATE = """\
 Analyze the following contract and return a JSON risk report using EXACTLY this schema:
 
 {schema}
-
+{language_instruction}
 CONTRACT TEXT:
 ---
 {contract_text}
@@ -65,11 +65,27 @@ CONTRACT TEXT:
 
 Return ONLY the JSON object. No other text before or after it."""
 
+# When the UI language is Arabic, the user-facing TEXT fields must be Arabic, but
+# the structural/enum fields stay English so internal logic + validation work.
+_ARABIC_INSTRUCTION = """
+LANGUAGE INSTRUCTION (IMPORTANT):
+Write ALL user-facing text fields in clear Modern Standard Arabic (العربية):
+contract_type, summary, final_recommendation, and for EACH risk: title, category,
+simple_explanation, why_it_matters, question_to_ask, suggested_action.
+Keep the JSON keys themselves in English.
+Keep clause_text in the ORIGINAL contract language (verbatim quote — do not translate it).
+The fields "overall_risk" and "severity" MUST remain EXACTLY one of the English
+values (High | Medium | Low | Minimal) — do NOT translate those two fields.
+"""
 
-def build_analysis_prompt(contract_text: str) -> str:
-    """Assemble the final user prompt with schema and contract text."""
+
+def build_analysis_prompt(contract_text: str, language: str = "en") -> str:
+    """Assemble the final user prompt with schema and contract text.
+    language='ar' makes the user-facing fields Arabic (enums stay English)."""
+    lang_instruction = _ARABIC_INSTRUCTION if str(language).lower().startswith("ar") else ""
     return ANALYSIS_PROMPT_TEMPLATE.format(
         schema=SCHEMA_HINT,
+        language_instruction=lang_instruction,
         contract_text=contract_text,
     )
 

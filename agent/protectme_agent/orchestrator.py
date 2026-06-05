@@ -35,13 +35,14 @@ class Orchestrator:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    async def analyze_contract(self, text: str) -> dict:
+    async def analyze_contract(self, text: str, language: str = "en") -> dict:
         """
         Analyze contract text and return a risk report as a plain dict
         (ready to store in the session and serialize to JSON).
+        language='ar' makes the user-facing fields Arabic (enums stay English).
         """
         agent = self._get_analysis_agent()
-        report = await agent.analyze(text)
+        report = await agent.analyze(text, language=language)
         # mode='json' ensures enum values are strings, datetimes are ISO strings, etc.
         return report.model_dump(mode="json")
 
