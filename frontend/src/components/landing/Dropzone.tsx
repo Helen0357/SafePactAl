@@ -1,6 +1,7 @@
 "use client";
 import { Button } from "@/components/ui/Button";
 import { LucideIcon } from "@/components/ui/Icon";
+import { useTranslations } from "next-intl";
 import { useCallback, useRef, useState } from "react";
 
 type DropzoneState = "idle" | "uploading" | "error";
@@ -23,6 +24,7 @@ export function Dropzone({
   const [drag, setDrag] = useState(false);
   const [state, setState] = useState<DropzoneState>("idle");
   const inputRef = useRef<HTMLInputElement>(null);
+  const t = useTranslations("Dropzone");
 
   const handleFile = useCallback(
     (file: File | undefined) => {
@@ -78,10 +80,10 @@ export function Dropzone({
             <div className="absolute inset-0 rounded-3xl border-2 border-[#67a1ff]  animate-spin" />
           </div>
           <h3 className="text-lg font-bold text-slate-900 mb-2">
-            Reading clauses...
+            {t("uploading.title")}
           </h3>
           <p className="text-slate-500 text-sm mb-5 text-center">
-            Our AI is analyzing every word for potential risks.
+            {t("uploading.subtitle")}
           </p>
 
           <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden shadow-inner">
@@ -91,7 +93,7 @@ export function Dropzone({
             />
           </div>
           <span className="mt-3 text-xs font-bold text-[#67a1ff] bg-[#67a1ff]/10 px-3 py-1 rounded-full">
-            {progress}% Processed
+            {progress}% {t("uploading.processed")}
           </span>
         </div>
       ) : dzState === "error" ? (
@@ -100,10 +102,10 @@ export function Dropzone({
             <LucideIcon name="file-x" size={32} />
           </div>
           <h3 className="text-lg font-bold text-slate-900">
-            Unsupported file type
+            {t("error.title")}
           </h3>
           <p className="text-sm text-slate-500 mt-1 max-w-[240px]">
-            Please use PDF or TXT files for the best analysis results.
+            {t("error.subtitle")}
           </p>
           <Button
             variant="secondary"
@@ -114,7 +116,7 @@ export function Dropzone({
               setState("idle");
             }}
           >
-            Try another file
+            {t("error.button")}
           </Button>
         </div>
       ) : (
@@ -123,10 +125,10 @@ export function Dropzone({
             <LucideIcon name="upload" size={36} />
           </div>
           <h3 className="text-lg font-black text-[#252525] mb-1 tracking-tight">
-            Drop your contract
+            {t("idle.title")}
           </h3>
           <p className="text-slate-400 text-sm  mb-4 leading-relaxed">
-            Securely upload your agreement to start the risk analysis.
+            {t("idle.subtitle")}
           </p>
 
           <button
@@ -137,7 +139,7 @@ export function Dropzone({
             }}
           >
             <LucideIcon name="upload" size={17} className="" />
-            Select Document
+            {t("idle.button")}
           </button>
 
           <button
@@ -147,9 +149,9 @@ export function Dropzone({
               onSample();
             }}
           >
-            Looking for an example?{" "}
+            {t("idle.sample_link")}{" "}
             <span className="underline decoration-slate-200 underline-offset-4">
-              Try a sample lease
+              {t("idle.sample_action")}
             </span>
           </button>
         </div>

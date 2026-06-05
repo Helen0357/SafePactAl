@@ -1,5 +1,9 @@
 import axios from "axios";
-import type { AnalyzeResponse, GenerateMessageRequest, GenerateMessageResponse } from "./types";
+import type {
+  AnalyzeResponse,
+  GenerateMessageRequest,
+  GenerateMessageResponse,
+} from "./types";
 
 // API base URL. Accepts NEXT_PUBLIC_API_BASE_URL (preferred) or the legacy
 // NEXT_PUBLIC_API_URL, falling back to local dev.
@@ -13,6 +17,14 @@ const api = axios.create({
   timeout: 120_000,
 });
 
+api.interceptors.request.use((config) => {
+  if (typeof document !== "undefined") {
+    const locale = document.documentElement.lang || "en";
+    config.headers["X-Language"] = locale;
+  }
+  return config;
+});
+
 export async function analyzeContract(
   file?: File,
   text?: string,
@@ -20,7 +32,10 @@ export async function analyzeContract(
   const form = new FormData();
   if (file) form.append("file", file);
   if (text) form.append("text", text);
-  const { data } = await api.post<AnalyzeResponse>("/api/contracts/analyze", form);
+  const { data } = await api.post<AnalyzeResponse>(
+    "/api/contracts/analyze",
+    form,
+  );
   return data;
 }
 

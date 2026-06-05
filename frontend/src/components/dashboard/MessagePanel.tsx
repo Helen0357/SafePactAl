@@ -8,6 +8,7 @@ import type {
   MessageType,
   RiskItem,
 } from "@/lib/types";
+import { useTranslations } from "next-intl";
 import { useCallback, useState } from "react";
 
 interface MessagePanelProps {
@@ -49,8 +50,10 @@ export function MessagePanel({
   const [draft, setDraft] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const t = useTranslations("MessagePanel");
 
   const selectedRisks = risks.filter((r) => riskIds.includes(r.id));
+  const renderOptionLabel = (val: string) => t(`options.${val}`);
 
   const callGenerate = useCallback(
     async (extraInstruction?: string) => {
@@ -90,10 +93,10 @@ export function MessagePanel({
           </div>
           <div>
             <h2 className="text-base font-black text-[#2e2e2e] tracking-tight">
-              AI Message Draft
+              {t("header_title")}
             </h2>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-              Professional Assistant
+              {t("header_subtitle")}
             </p>
           </div>
         </div>
@@ -108,9 +111,11 @@ export function MessagePanel({
       <div className="flex-1 overflow-y-auto p-6 space-y-5 scrollbar-hide">
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold   text-slate-500">Context</h3>
+            <h3 className="text-xs font-bold   text-slate-500">
+              {t("context")}
+            </h3>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-bold">
-              {riskIds.length} Risks
+              {t("risks_count", { count: riskIds.length })}
             </span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -131,7 +136,7 @@ export function MessagePanel({
         <section className="space-y-4">
           <div className="space-y-3">
             <label className="text-xs font-bold   text-slate-500">
-              Inquiry Goal
+              {t("goal_label")}
             </label>
             <div className="grid grid-cols-2 gap-2">
               {TYPE_OPTIONS.map((opt) => (
@@ -141,7 +146,7 @@ export function MessagePanel({
                   className={`flex items-center gap-3 p-3 rounded-2xl border transition-all text-xs font-medium ${messageType === opt.value ? "border-[#7aadff] bg-[#67a1ff0a] text-[#7aadff]" : "border-slate-100 text-slate-500 hover:border-slate-200"}`}
                 >
                   <LucideIcon name={opt.icon} size={14} />
-                  {opt.label}
+                  {renderOptionLabel(opt.value)}
                 </button>
               ))}
             </div>
@@ -149,7 +154,9 @@ export function MessagePanel({
 
           <div className="grid grid-cols-2 gap-8">
             <div className="space-y-2">
-              <label className="text-xs font-bold   text-slate-500">Tone</label>
+              <label className="text-xs font-bold   text-slate-500">
+                {t("tone_label")}
+              </label>
               <div className="flex p-1 bg-slate-50 rounded-xs border border-slate-100">
                 {TONE_OPTIONS.map((opt) => (
                   <button
@@ -157,14 +164,14 @@ export function MessagePanel({
                     onClick={() => setTone(opt.value as MessageTone)}
                     className={`flex-1 py-1.5  rounded-2xl text-xs font-medium  transition-all ${tone === opt.value ? "bg-[#7aadff]/80  text-white" : "text-slate-500"}`}
                   >
-                    {opt.label}
+                    {renderOptionLabel(opt.value)}
                   </button>
                 ))}
               </div>
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold   text-slate-500">
-                Format
+                {t("format_label")}
               </label>
               <div className="flex p-1 bg-slate-50 rounded-xs border border-slate-100">
                 {FORMAT_OPTIONS.map((opt) => (
@@ -189,9 +196,9 @@ export function MessagePanel({
           {isLoading ? (
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
           ) : draft ? (
-            "Regenerate Draft"
+            t("button_regenerate")
           ) : (
-            "Generate Message"
+            t("button_generate")
           )}
         </button>
 
@@ -199,7 +206,7 @@ export function MessagePanel({
           <div className="space-y-3 animate-in fade-in slide-in-from-top-4 duration-500 ">
             <div className="flex items-center justify-between ">
               <label className="text-xs font-bold   text-slate-500">
-                AI Response
+                {t("ai_response")}
               </label>
               <div className="flex gap-2">
                 <div className="relative group">
@@ -210,7 +217,7 @@ export function MessagePanel({
                     <LucideIcon name={copied ? "check" : "copy"} size={14} />
                   </button>
                   <span className="absolute bottom-full left-[20%] -translate-x-1/2 mb-2 px-3 py-1.5 bg-[#535353] text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl">
-                    Copy to Clipboard
+                    {t("tooltips.copy")}
                     <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#535353]" />
                   </span>
                 </div>
@@ -226,7 +233,7 @@ export function MessagePanel({
                     <LucideIcon name="minimize-2" size={15} />
                   </button>
                   <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-[#535353] text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl">
-                    Make Shorter
+                    {t("tooltips.shorter")}
                     <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#535353]" />
                   </span>
                 </div>
@@ -242,8 +249,8 @@ export function MessagePanel({
                   >
                     <LucideIcon name="briefcase" size={15} />
                   </button>
-                  <span className="absolute bottom-full left-[20%] -translate-x-1/2 mb-2 px-3 py-1.5 bg-[#535353] text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl">
-                    More Formal
+                  <span className="absolute bottom-full ltr:left-[20%] rtl:left-[80%] -translate-x-1/2 mb-2 px-3 py-1.5 bg-[#535353] text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl">
+                    {t("tooltips.formal")}
                     <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#535353]" />
                   </span>
                 </div>
@@ -263,10 +270,7 @@ export function MessagePanel({
       <div className="p-3 bg-slate-50 border-t border-slate-200">
         <div className="flex gap-2 text-slate-500">
           <LucideIcon name="info" size={14} className="shrink-0 mt-0.5" />
-          <p className="text-[10px] leading-relaxed font-medium">
-            ProtectMe AI helps you understand contracts. It does not replace a
-            lawyer or provide legal advice.
-          </p>
+          <p className="text-[10px] leading-relaxed font-medium">{t("text")}</p>
         </div>
       </div>
     </div>

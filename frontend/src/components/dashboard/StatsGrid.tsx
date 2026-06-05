@@ -1,7 +1,7 @@
-
 "use client";
 import { LucideIcon } from "@/components/ui/Icon";
 import type { RiskReport, RiskSeverity } from "@/lib/types";
+import { useTranslations } from "next-intl";
 
 interface StatCardProps {
   icon: string;
@@ -40,6 +40,8 @@ function StatCard({ icon, color, label, value, sub }: StatCardProps) {
 }
 
 export function StatsGrid({ report }: { report: RiskReport }) {
+  const t = useTranslations("Dashboard.stats");
+  const ts = useTranslations("Severity");
   const counts = report.risks.reduce(
     (acc, r) => {
       acc[r.severity as RiskSeverity] =
@@ -50,41 +52,46 @@ export function StatsGrid({ report }: { report: RiskReport }) {
   );
 
   const subSummary = [
-    counts.High ? `${counts.High} High` : null,
-    counts.Medium ? `${counts.Medium} Med` : null,
-    counts.Low ? `${counts.Low} Low` : null,
+    counts.High
+      ? t("severity_counts", { count: counts.High, severity: ts("high") })
+      : null,
+    counts.Medium
+      ? t("severity_counts", { count: counts.Medium, severity: ts("medium") })
+      : null,
+    counts.Low
+      ? t("severity_counts", { count: counts.Low, severity: ts("low") })
+      : null,
   ]
     .filter(Boolean)
     .join(" • ");
-
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pb-3">
       <StatCard
         icon="file-text"
         color="#67a1ff"
-        label="Contract Type"
+        label={t("contract_type")}
         value={report.contract_type}
       />
 
       <StatCard
         icon="shield-alert"
         color={report.overall_risk === "High" ? "#ef4444" : "#f59e0b"}
-        label="Overall Assessment"
+        label={t("overall_assessment")}
         value={report.overall_risk}
       />
 
       <StatCard
         icon="list-checks"
         color="#8b5cf6"
-        label="Findings"
-        value={`${report.risks.length} Detected`}
+        label={t("findings")}
+        value={`${report.risks.length} ${t("detected")}`}
         sub={subSummary}
       />
 
       <StatCard
         icon="message-square"
         color="#10b981"
-        label="Final Advice"
+        label={t("final_advice")}
         value={report.final_recommendation}
       />
     </div>

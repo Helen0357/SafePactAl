@@ -9,12 +9,13 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "axios": "^1.7.0",
+    "lucide-react": "^0.427.0",
     "next": "14.2.29",
+    "next-intl": "^4.13.0",
     "react": "^18",
     "react-dom": "^18",
-    "axios": "^1.7.0",
-    "zustand": "^4.5.0",
-    "lucide-react": "^0.427.0"
+    "zustand": "^4.5.0"
   },
   "devDependencies": {
     "@types/node": "^20",

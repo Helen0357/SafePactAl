@@ -76,7 +76,7 @@ body {
   height: 100%;
   background: var(--app-bg, #0b1124);
   color: var(--app-fg, #f4f7fc);
-  font-family: var(--font-sans);
+  /* font-family: var(--font-sans); */
   font-size: var(--fs-body);
   line-height: var(--lh-body);
   font-weight: var(--fw-regular);
@@ -86,7 +86,7 @@ body {
 }
 
 button {
-  font-family: var(--font-sans);
+  /* font-family: var(--font-sans); */
   border-radius: 6px !important;
 }
 #__next {
@@ -905,7 +905,11 @@ button {
 /* =============================================================================
    Risk Card
    ============================================================================= */
-.riskcard {
+
+[lang="ar"] .riskcard {
+  border-right: 4px solid var(--lvl, var(--risk-low));
+}
+[lang="en"] .riskcard {
   border-left: 4px solid var(--lvl, var(--risk-low));
 }
 .riskcard-high {
@@ -1859,9 +1863,11 @@ button {
 body {
   background-color: var(--surface-base);
   color: var(--text-primary);
-  font-family: "Google Sans", "Plus Jakarta Sans", sans-serif;
+  /* font-family: "Google Sans", "Plus Jakarta Sans", sans-serif; */
 }
-
+[lang="ar"] {
+  font-family: var(--font-almarai) !important;
+}
 /* شريط التنقل العلوي: نظيف جداً وبسيط */
 .nav {
   background: #ffffff !important;
@@ -1876,7 +1882,6 @@ body {
 
 .riskcard {
   background: #ffffff !important;
-  border-left: 6px solid var(--lvl) !important;
   border-radius: 8px !important;
 }
 

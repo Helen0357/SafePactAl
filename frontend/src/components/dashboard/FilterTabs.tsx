@@ -1,5 +1,6 @@
 "use client";
 import type { FilterTab, RiskReport } from "@/lib/types";
+import { useTranslations } from "next-intl";
 
 interface FilterTabsProps {
   active: FilterTab;
@@ -8,18 +9,19 @@ interface FilterTabsProps {
 }
 
 export function FilterTabs({ active, onChange, report }: FilterTabsProps) {
+  const t = useTranslations("Dashboard.filters");
+
   const counts = {
     all: report.risks.length,
     high: report.risks.filter((r) => r.severity === "High").length,
     medium: report.risks.filter((r) => r.severity === "Medium").length,
     low: report.risks.filter((r) => r.severity === "Low").length,
   };
-
   const tabs: { id: FilterTab; label: string; dot: string | null }[] = [
-    { id: "all", label: "All", dot: null },
-    { id: "high", label: "High", dot: "var(--risk-high)" },
-    { id: "medium", label: "Medium", dot: "var(--risk-med)" },
-    { id: "low", label: "Low", dot: "var(--risk-low)" },
+    { id: "all", label: t("all"), dot: null },
+    { id: "high", label: t("high"), dot: "var(--risk-high)" },
+    { id: "medium", label: t("medium"), dot: "var(--risk-med)" },
+    { id: "low", label: t("low"), dot: "var(--risk-low)" },
   ];
 
   return (
