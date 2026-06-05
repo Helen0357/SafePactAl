@@ -2,6 +2,7 @@
 import { Button } from "@/components/ui/Button";
 import type { DebugLine, RiskItem } from "@/lib/types";
 import { LucideIcon } from "../ui/Icon";
+import { useTranslations } from "next-intl";
 
 interface ActionBarProps {
   selectedCount: number;
@@ -22,6 +23,7 @@ export function ActionBar({
   onGenerateSelected,
   onCallAgent,
 }: ActionBarProps) {
+  const t = useTranslations("ActionBar");
   return (
     <div className="fixed bottom-0 left-0 w-full flex flex-col items-center z-[100] pointer-events-none pb-8">
       {/* <div className="w-full max-w-4xl px-6 pointer-events-auto mb-4 transition-all duration-500">
@@ -40,7 +42,9 @@ export function ActionBar({
               onClick={onCallAgent}
             >
               <LucideIcon name="phone" size={18} className="text-[#fff]" />
-              <span className="font-bold tracking-tight">Talk to Agent</span>
+              <span className="font-bold tracking-tight">
+                {t("talk_to_agent")}
+              </span>
             </button>
           </div>
         ) : (
@@ -53,7 +57,7 @@ export function ActionBar({
                   </span>
                 </div>
                 <p className="text-white text-sm font-bold tracking-tight">
-                  Risk{selectedCount > 1 ? "s" : ""} Selected
+                  {t("risks_selected", { count: selectedCount })}
                 </p>
               </div>
 
@@ -61,27 +65,22 @@ export function ActionBar({
                 <Button
                   variant="secondary"
                   size="sm"
-                  className="!rounded-full font-bold !bg-white/10 !border-white/10 !text-white !px-5"
+                  className="!rounded-full font-bold !bg-white/10 flex gap-2 !border-white/10 !text-white !px-5"
                   onClick={() => onGenerateSelected(selectedRisks)}
                 >
                   <LucideIcon
                     name="sparkles"
                     size={14}
-                    className="mr-2 text-[#fff]"
+                    className=" text-[#fff]"
                   />
-                  Generate Message
+                  {t("generate_message")}
                 </Button>
                 <button
-                  className="!rounded-full flex items-center  !px-6 !bg-red-500 text-white text-xs !h-11 shadow-lg shadow-blue-500/20"
+                  className="!rounded-full flex items-center gap-2 !px-6 !bg-red-500 text-white text-xs !h-11 shadow-lg shadow-blue-500/20"
                   onClick={onCallAgent}
                 >
-                  {" "}
-                  <LucideIcon
-                    name="phone"
-                    size={14}
-                    className="mr-2 text-[#fff]"
-                  />
-                  Call Agent
+                  <LucideIcon name="phone" size={14} className=" text-[#fff]" />
+                  {t("call_agent")}
                 </button>
               </div>
             </div>

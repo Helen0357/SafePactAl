@@ -12,6 +12,7 @@ import { Toast } from "@/components/ui/Toast";
 import { setActiveClause } from "@/lib/api";
 import type { FilterTab, RiskItem, ToastData } from "@/lib/types";
 import { useStore } from "@/store/useStore";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -29,7 +30,8 @@ export default function DashboardPage() {
     addDebugLine,
     _hasHydrated,
   } = useStore();
-
+  const t = useTranslations("Dashboard");
+  const locale = useLocale();
   const [filter, setFilter] = useState<FilterTab>("all");
   const [search, setSearch] = useState("");
   const [termOpen, setTermOpen] = useState(false);
@@ -151,7 +153,7 @@ export default function DashboardPage() {
   );
   const panelOpen = panelMode !== "none";
   return (
-    <div className="min-h-screen bg-slate-50/30 relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-slate-50/30 relative overflow-hidden ">
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute top-[-5%] left-[-5%] w-[45%] h-[45%] bg-[#7aadff15] rounded-full blur-[120px]"></div>
         <div className="absolute bottom-[-5%] right-[-5%] w-[35%] h-[35%] bg-[#67a1ff10] rounded-full blur-[120px]"></div>
@@ -162,18 +164,18 @@ export default function DashboardPage() {
       <div className="relative z-[100] w-full mx-auto px-[5%] py-10">
         <div className="flex flex-col lg:flex-row gap-8 w-full">
           <div
-            className={`flex transition-all duration-500 ease-in-out w-full ${panelOpen ? " mr-[400px]" : "mr-0"}`}
+            className={`flex transition-all duration-500 ease-in-out w-full ${panelOpen ? (locale === "ar" ? " ml-[400px]" : " mr-[400px]") : ""}`}
           >
             <div className="flex-1 min-w-0 space-y-2">
               <header className="flex flex-col md:flex-row md:items-start justify-between gap-6">
                 <div className="mb-3">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="px-2 py-1 rounded-md bg-[#67a1ff15] text-[#67a1ff] text-[10px] font-black uppercase tracking-widest">
-                      Analysis Report
+                      {t("header.label")}
                     </span>
                     <span className="text-slate-300 text-xs">•</span>
                     <span className="text-slate-500 text-xs font-medium">
-                      Session {sessionId.slice(0, 8)}
+                      {t("header.session")} {sessionId.slice(0, 8)}
                     </span>
                   </div>
                   <h1 className="text-2xl font-black text-[#202020] tracking-tight leading-none">
@@ -206,7 +208,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <div
-            className={`fixed top-0 right-0 h-full  w-[450px] bg-white shadow-md transition-transform duration-500 ease-in-out z-[200] ${panelOpen ? "translate-x-0" : "translate-x-full"}`}
+            className={`fixed top-0 ltr:right-0 rtl:left-0 h-full  w-[450px] bg-white shadow-md transition-transform duration-500 ease-in-out z-[200] ${panelOpen ? "translate-x-0" : "rtl:-translate-x-full ltr:translate-x-full"}`}
           >
             {panelMode === "message" && (
               <MessagePanel

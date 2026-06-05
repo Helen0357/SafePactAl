@@ -8,6 +8,7 @@ import type {
   TranscriptEntry,
   VoiceStatus,
 } from "@/lib/types";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface VoicePanelProps {
@@ -138,7 +139,8 @@ export function VoicePanel({
   const [draftCopied, setDraftCopied] = useState(false);
   const [reconnectKey, setReconnectKey] = useState(0);
   const [micLevel, setMicLevel] = useState(0); // 0–1 RMS for level indicator
-
+  const t = useTranslations("VoicePanel");
+  const locale = useLocale();
   // Effective transport mode. Starts from the useLive prop; auto-flips to TTS
   // (false) if Live produces no audio — the call keeps working either way.
   const [liveMode, setLiveMode] = useState(useLive);
@@ -948,10 +950,10 @@ export function VoicePanel({
           </div>
           <div>
             <h2 className="text-base font-black text-[#2e2e2e] tracking-tight">
-              Legal Assistant
+              {t("header.title")}
             </h2>{" "}
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-              Neural Audio Session
+              {t("header.subtitle")}
             </p>
           </div>
         </div>
@@ -1024,7 +1026,7 @@ export function VoicePanel({
             </h3>
             {wsState === "closed" && endedByUserRef.current && (
               <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-1">
-                Session Ended
+                {t("status.ended")}
               </span>
             )}
           </div>
@@ -1038,9 +1040,7 @@ export function VoicePanel({
                 className="mx-auto mb-4"
               />
               <p className="text-xs font-bold uppercase tracking-widest leading-relaxed">
-                Start talking to analyze
-                <br />
-                this document together
+                {t("empty_state")}
               </p>
             </div>
           )}
@@ -1048,22 +1048,22 @@ export function VoicePanel({
           {transcript.map((entry, i) => (
             <div
               key={i}
-              className={`flex flex-col ${entry.role === "user" ? "items-end" : "items-start"}`}
+              className={`flex flex-col ${entry.role === "user" ? "ltr:items-end rtl:items-start" : "ltr:items-start rtl:items-end"}`}
             >
               <span className="text-gray-500 mb-1 text-xs">
-                {entry.role === "user" ? "You" : "Agent"}
+                {entry.role === "user" ? t("roles.user") : t("roles.agent")}
               </span>
               {entry.kind === "draft" ? (
                 <div className="w-full bg-blue-50/50 border border-blue-100 p-4 rounded-2xl mb-2">
                   <div className="flex justify-between mb-2">
                     <span className="text-[10px] font-black text-blue-500 uppercase">
-                      AI Draft Ready
+                      {t("draft.title")}
                     </span>
                     <button
                       onClick={handleCopyDraft}
                       className="text-xs font-bold text-blue-600"
                     >
-                      Copy
+                      {t("draft.copy")}
                     </button>
                   </div>
                   <pre className="text-xs text-slate-600 whitespace-pre-wrap">
@@ -1074,7 +1074,7 @@ export function VoicePanel({
                 <div
                   className={`max-w-[85%] p-5 rounded-2xl text-sm leading-relaxed font-medium  transition-all ${
                     entry.role === "user"
-                      ? "bg-[#7aadff] text-white rounded-tr-none"
+                      ? "bg-[#7aadff] text-white rounded-tr-none "
                       : "bg-slate-50 text-[#4f4f4f] border border-[#eee] rounded-tl-none"
                   }`}
                 >
@@ -1119,22 +1119,22 @@ export function VoicePanel({
 
         <form onSubmit={handleTextSubmit} className="relative group">
           <input
-            className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-6 pr-12 text-sm text-slate-700 outline-none focus:ring-4 focus:ring-[#67a1ff0a] focus:border-[#67a1ff50] transition-all"
+            className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 ltr:pl-6 ltr:pr-12 rtl:pl-12 rtl:pr-6 text-sm text-slate-700 outline-none focus:ring-4 focus:ring-[#67a1ff0a] focus:border-[#67a1ff50] transition-all"
             type="text"
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
             placeholder={
               liveMode
-                ? "Ask Gemini Live anything..."
+                ? t("placeholders.live")
                 : hasSR
-                  ? "Type or use the mic..."
-                  : "Type your question (Mic unavailable)..."
+                  ? t("placeholders.mic")
+                  : t("placeholders.no_mic")
             }
           />
           <button
             type="submit"
             disabled={!textInput.trim()}
-            className="absolute right-2 top-2 p-2 !rounded-full text-[#67a1ff] hover:bg-[#67a1ff] hover:text-white transition-all disabled:opacity-20"
+            className="absolute ltr:right-2 rtl:left-2 top-2 p-2 !rounded-full text-[#67a1ff] hover:bg-[#67a1ff] hover:text-white transition-all disabled:opacity-20"
           >
             <LucideIcon name="send" size={20} />
           </button>
@@ -1143,7 +1143,7 @@ export function VoicePanel({
         <div className="flex items-center justify-center gap-2 pt-2 opacity-40">
           <LucideIcon name="lock" size={12} />
           <span className="text-[9px] font-black uppercase tracking-widest">
-            Privacy Protected AI Session
+            {t("footer")}
           </span>
         </div>
       </div>

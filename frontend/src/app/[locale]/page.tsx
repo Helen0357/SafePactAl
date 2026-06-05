@@ -1,6 +1,6 @@
 "use client";
 import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/routing";
 import { Nav } from "@/components/Nav";
 import { Dropzone } from "@/components/landing/Dropzone";
 import { PasteInput } from "@/components/landing/PasteInput";
@@ -12,12 +12,14 @@ import { analyzeContract } from "@/lib/api";
 import { useStore } from "@/store/useStore";
 import { SAMPLE_CONTRACT } from "@/lib/sampleContract";
 import type { ToastData } from "@/lib/types";
+import { useTranslations } from "next-intl";
 
 type UploadTab = "file" | "paste";
 
 export default function LandingPage() {
   const router = useRouter();
   const { setSession, addDebugLine } = useStore();
+  const t = useTranslations("Landing");
 
   const [tab, setTab] = useState<UploadTab>("file");
   const [isLoading, setIsLoading] = useState(false);
@@ -114,19 +116,18 @@ export default function LandingPage() {
         {/* Hero Section */}
         <div className="text-center mb-10 space-y-2">
           <span className="inline-block px-4 py-1.5 rounded-full bg-[#67a1ff10] text-[#333] text-xs font-medium tracking-widest animate-fade-in">
-            Next-Gen Contract Intelligence
+            {t("hero.eyebrow")}
           </span>
 
           <h1 className="text-5xl md:text-6xl font-black text-[#252525] tracking-tight leading-[1.1]">
-            Understand before <br />
+            {t("hero.title_main")} <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7aadff] to-[#67a1ff8f]">
-              you sign
+              {t("hero.title_highlight")}
             </span>
           </h1>
 
           <p className="max-w-xl mx-auto text-sm pt-2 text-[#333] leading-relaxed">
-            ProtectMe AI analyzes every clause in seconds, highlighting risks in
-            plain language so you can sign with total confidence.
+            {t("hero.description")}
           </p>
         </div>
 
@@ -137,14 +138,14 @@ export default function LandingPage() {
               onClick={() => setTab("file")}
             >
               <LucideIcon name="upload-cloud" size={16} />
-              Upload File
+              {t("tabs.file")}
             </button>
             <button
               className={`flex-1 flex items-center justify-center gap-2 py-2 !rounded-full text-sm font-medium transition-all ${tab === "paste" ? "bg-[#7aadff] text-white shadow-md" : "text-slate-400 hover:text-slate-600"}`}
               onClick={() => setTab("paste")}
             >
               <LucideIcon name="clipboard" size={16} />
-              Paste Text
+              {t("tabs.paste")}
             </button>
           </div>
 
@@ -161,16 +162,15 @@ export default function LandingPage() {
 
           <div className="privacy-note">
             <LucideIcon name="lock" size={15} color="#64748b" />
-            <span className="text-slate-500">
-              Your contract stays private. We analyze it to build your report
-              and never sell your data.
-            </span>
+            <span className="text-slate-500">{t("privacy_note")}</span>
           </div>
         </div>
 
         <section className="landing-section" id="how_it_work">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-[#252525]">How it works</h2>
+            <h2 className="text-4xl font-bold text-[#252525]">
+              {t("how_it_works")}
+            </h2>
             <div className="h-1.5 w-14 bg-[#7aadff] mx-auto mt-4 rounded-full"></div>
           </div>
           <HowItWorks />

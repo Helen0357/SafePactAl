@@ -1,6 +1,6 @@
-
 "use client";
 import { LucideIcon } from "@/components/ui/Icon";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 interface PasteInputProps {
@@ -10,6 +10,7 @@ interface PasteInputProps {
 
 export function PasteInput({ onSubmit, isLoading }: PasteInputProps) {
   const [text, setText] = useState("");
+  const t = useTranslations("PasteInput");
 
   const handleSubmit = () => {
     const trimmed = text.trim();
@@ -26,7 +27,7 @@ export function PasteInput({ onSubmit, isLoading }: PasteInputProps) {
         className="w-full min-h-[280px] p-8 text-slate-700 bg-transparent outline-none resize-none text-base leading-relaxed placeholder:text-slate-300"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Paste the contract text here... Our Agent will read it immediately."
+        placeholder={t("placeholder")}
         disabled={isLoading}
       />
 
@@ -36,7 +37,7 @@ export function PasteInput({ onSubmit, isLoading }: PasteInputProps) {
             <span
               className={`text-xs font-bold  ${charCount < 50 ? "text-[#656565]" : "text-[#00e340]"}`}
             >
-              Character Count :
+              {t("char_count")} :
             </span>
             <span className="text-sm  font-bold text-slate-600">
               {charCount.toLocaleString()}
@@ -47,7 +48,7 @@ export function PasteInput({ onSubmit, isLoading }: PasteInputProps) {
             <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 rounded-lg animate-in fade-in slide-in-from-left-2">
               <LucideIcon name="info" size={14} className="text-amber-500" />
               <span className="text-[11px] font-bold text-amber-700">
-                Need 50+ chars
+                {t("min_chars_warning")}
               </span>
             </div>
           )}
@@ -61,12 +62,12 @@ export function PasteInput({ onSubmit, isLoading }: PasteInputProps) {
           {isLoading ? (
             <div className="flex items-center gap-2">
               <LucideIcon name="loader" size={18} className="animate-spin" />
-              Analyzing...
+              {t("analyzing")}
             </div>
           ) : (
             <div className="flex items-center gap-2">
               <LucideIcon name="search" size={18} />
-              Analyze Text
+              {t("analyze_button")}
             </div>
           )}
         </button>

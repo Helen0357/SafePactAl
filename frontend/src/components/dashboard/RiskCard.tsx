@@ -3,6 +3,7 @@ import { LucideIcon } from "@/components/ui/Icon";
 import { SeverityBadge } from "@/components/ui/SeverityBadge";
 import { Button } from "@/components/ui/Button";
 import type { RiskItem } from "@/lib/types";
+import { useTranslations } from "next-intl";
 
 interface RiskCardProps {
   risk: RiskItem;
@@ -57,6 +58,8 @@ export function RiskCard({
   onAsk,
   onGenerate,
 }: RiskCardProps) {
+  const t = useTranslations("RiskCard");
+
   const severityKey = risk.severity.toLowerCase();
   const preview =
     risk.simple_explanation.length > 120
@@ -64,7 +67,7 @@ export function RiskCard({
       : risk.simple_explanation;
   return (
     <div
-      className={`group mb-2 w-full rounded-md transition-all duration-500 overflow-hidden bg-white border ${selected ? "border-[#67a1ff62] ring-4 ring-[#67a1ff0a]" : "border-slate-200"} riskcard riskcard-${severityKey}`}
+      className={`group mb-2 w-full rounded-md transition-all duration-500 overflow-hidden bg-white border  ${selected ? "border-[#67a1ff62] ring-4 ring-[#67a1ff0a]" : "border-slate-200"} riskcard riskcard-${severityKey}`}
     >
       <button
         className="w-full flex items-center gap-4 p-6 text-left"
@@ -101,7 +104,7 @@ export function RiskCard({
             </span>
           </div>
           {!expanded && (
-            <p className="text-xs text-slate-500 line-clamp-1 ">
+            <p className="text-xs text-slate-500 line-clamp-1 rtl:text-right ltr:text-left ">
               {risk.simple_explanation}
             </p>
           )}
@@ -124,11 +127,11 @@ export function RiskCard({
       {expanded && (
         <div className="px-6 pb-8 space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
           <div className="p-5 rounded-sm bg-slate-50/80 border border-slate-100 relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-3 opacity-5">
+            <div className="absolute top-0 ltr:right-0 rtl:left-0 p-3 opacity-5">
               <LucideIcon name="quote" size={28} />
             </div>
             <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest block mb-3">
-              Original Legal Text :
+              {t("original_text")}
             </span>
             <p className="text-[13px] font-mono text-slate-600 leading-relaxed ">
               {risk.clause_text}
@@ -140,7 +143,7 @@ export function RiskCard({
               <div className="flex items-center gap-2 text-[#67a1ff]">
                 <LucideIcon name="message-circle" size={16} />
                 <span className="text-xs font-bold uppercase tracking-wider">
-                  In Plain Terms
+                  {t("plain_terms")}
                 </span>
               </div>
               <p className="text-sm text-[#333] leading-relaxed">
@@ -151,7 +154,7 @@ export function RiskCard({
               <div className="flex items-center gap-2 text-amber-500">
                 <LucideIcon name="alert-circle" size={16} />
                 <span className="text-xs font-bold uppercase tracking-wider">
-                  Why it Matters
+                  {t("why_it_matters")}
                 </span>
               </div>
               <p className="text-sm text-[#333] leading-relaxed">
@@ -169,7 +172,7 @@ export function RiskCard({
                 className="!rounded-full !bg-white !border-slate-200 !text-slate-600"
                 onClick={() => onAsk(risk)}
               >
-                Ask Agent
+                {t("ask_agent")}
               </Button>
               <Button
                 variant="secondary"
@@ -178,7 +181,7 @@ export function RiskCard({
                 className="!rounded-full !bg-white !border-slate-200 !text-slate-600"
                 onClick={() => onGenerate(risk)}
               >
-                Generate message
+                {t("generate_message")}
               </Button>
             </div>
             <button
@@ -189,7 +192,7 @@ export function RiskCard({
                 name={selected ? "check-circle" : "plus-circle"}
                 size={16}
               />
-              {selected ? "Selected" : "Select for Action"}
+              {selected ? t("selected") : t("select_action")}
             </button>
           </div>
         </div>
