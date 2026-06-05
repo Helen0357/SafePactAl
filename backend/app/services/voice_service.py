@@ -39,7 +39,12 @@ from app.schemas.session_schema import GeneratedMessage
 from app.services.session_service import session_service
 
 from protectme_agent.conversation_agent import ConversationAgent  # noqa: E402
-from protectme_agent.fast_path import match_fast_path, wants_arabic, wants_modify  # noqa: E402
+from protectme_agent.fast_path import (  # noqa: E402
+    match_fast_path,
+    wants_arabic,
+    wants_modify,
+    wants_pdf,
+)
 from protectme_agent.gemini_client import GeminiClient  # noqa: E402
 from protectme_agent.safety.legal_disclaimer import (  # noqa: E402
     DISCLAIMER_HIGH_RISK,
@@ -511,7 +516,8 @@ class VoiceService:
                 # Default "Let me check that." only for genuine Gemini-fallback questions —
                 # not for fast-path answers, and not for "make it shorter" style draft edits
                 # (the modify handler speaks its own confirmation).
-                if not preamble and not match_fast_path(user_text) and not wants_modify(user_text):
+                if (not preamble and not match_fast_path(user_text)
+                        and not wants_modify(user_text) and not wants_pdf(user_text)):
                     preamble = "Let me check that."
             if preamble:
                 async with send_lock:

@@ -66,6 +66,16 @@ class ConversationAgent:
 
         report = session.risk_report
 
+        # 0. PDF report download ("download/generate the report as a PDF"). Pure
+        #    fast-path, no Gemini: emit a download_pdf event the frontend turns
+        #    into a direct browser download using the existing risk_report.
+        if report and fp.wants_pdf(user_text):
+            yield {"type": "debug", "log": "[FastPath] generate_pdf_report (download event)"}
+            yield {"type": "sentence", "text": "I prepared the PDF report for you."}
+            yield {"type": "download_pdf", "message": "I prepared the PDF report for you."}
+            yield {"type": "status", "state": "idle", "label": "Ready"}
+            return
+
         # 1. Modify the most recent generated draft (memory of last action).
         #    Guard: a clear "write a (new) message" request is a generation, not
         #    an edit — e.g. "write a whatsapp message, make it short".

@@ -54,4 +54,37 @@ export async function setSelectedClauses(
   });
 }
 
+export const REPORT_PDF_FILENAME = "ProtectMe_AI_Risk_Report.pdf";
+
+/** Trigger a direct browser download for an in-memory blob (no server storage). */
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoke after a tick so the download has started.
+  setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Fetch the risk-report PDF for a session and download it directly.
+ * Throws an axios error (with `.response.status`) on 404/409 so the caller can
+ * show the right message. Nothing is stored anywhere.
+ */
+export async function downloadReportPdf(
+  sessionId: string,
+  language = "en",
+): Promise<void> {
+  const resp = await api.post(
+    "/api/reports/download-pdf",
+    { session_id: sessionId, language },
+    { responseType: "blob" },
+  );
+  const blob = new Blob([resp.data], { type: "application/pdf" });
+  triggerBlobDownload(blob, REPORT_PDF_FILENAME);
+}
+
 export { api };

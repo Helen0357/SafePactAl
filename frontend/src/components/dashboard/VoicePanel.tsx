@@ -1,6 +1,6 @@
 "use client";
 import { LucideIcon } from "@/components/ui/Icon";
-import { setActiveClause } from "@/lib/api";
+import { downloadReportPdf, setActiveClause } from "@/lib/api";
 import { startAudioCapture, type AudioCaptureHandle } from "@/lib/audioCapture";
 import type {
   DebugLine,
@@ -816,6 +816,23 @@ export function VoicePanel({
 
       case "tool_result":
         onDebugLine("tool", `tool_result: ${ev.tool}`);
+        break;
+
+      case "download_pdf":
+        // The agent asked for the PDF — fetch + trigger a direct browser download.
+        onDebugLine("tool", "download_pdf — fetching report");
+        addEntry({ role: "agent", text: "PDF report is downloading.", kind: "text" });
+        downloadReportPdf(sessionId)
+          .then(() => onDebugLine("info", "PDF report downloaded"))
+          .catch((err: any) => {
+            const status = err?.response?.status;
+            const msg =
+              status === 404
+                ? "Session expired. Please analyze the contract again."
+                : "Could not download the PDF report.";
+            addEntry({ role: "agent", text: msg, kind: "error" });
+            onDebugLine("error", `PDF download failed (${status ?? "?"})`);
+          });
         break;
 
       case "error":

@@ -19,6 +19,9 @@ google-cloud-texttospeech>=2.16.0
 # ── PDF extraction ────────────────────────────────────────
 PyMuPDF>=1.24.0
 
+# ── PDF report generation (Phase 8I — downloadable risk report) ──
+reportlab>=4.0.0
+
 # ── HTTP & file uploads ───────────────────────────────────
 httpx>=0.27.0
 python-multipart>=0.0.12

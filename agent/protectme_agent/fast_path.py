@@ -214,6 +214,24 @@ def selected_followup(user_text: str) -> bool:
     return bool(_SELECTED_FOLLOWUP_RE.search(user_text or ""))
 
 
+# ── PDF report download (Phase 8I) ───────────────────────────────────────────
+# "download/generate/export the report as a PDF", "make a PDF", "give me a file",
+# and Arabic equivalents. Deterministic — triggers a frontend download event.
+_PDF_RE = re.compile(
+    r"\b(download|generate|create|export|make|prepare|give me|send me|get me|build)\b"
+    r"[^.?!]{0,25}\b(pdf|report|file|document|copy)\b"
+    r"|\bpdf\b|\bdownload (the )?report\b|\bexport (the )?report\b"
+    r"|حمّ?ل التقرير|نزّ?ل التقرير|اعمل pdf|اعمل ملف|سوّ?ي pdf|سوّ?ي ملف"
+    r"|صدّ?ر التقرير|نزل التقرير|حمل التقرير|ملف pdf|التقرير (ك)?ملف|عطني ملف",
+    re.IGNORECASE,
+)
+
+
+def wants_pdf(user_text: str) -> bool:
+    """True if the user is asking to download/generate a PDF report (EN or AR)."""
+    return bool(_PDF_RE.search(user_text or ""))
+
+
 # ── Arabic language support (Phase 8H) ───────────────────────────────────────
 # Lightweight, per-turn language detection + Arabic intent matching so Arabic
 # questions route to the same fast-path intents and answer from the risk_report.

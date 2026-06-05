@@ -8,8 +8,9 @@ import { SearchInput } from "@/components/dashboard/SearchInput";
 import { StatsGrid } from "@/components/dashboard/StatsGrid";
 import { VoicePanel } from "@/components/dashboard/VoicePanel";
 import { SeverityBadge } from "@/components/ui/SeverityBadge";
+import { LucideIcon } from "@/components/ui/Icon";
 import { Toast } from "@/components/ui/Toast";
-import { setActiveClause, setSelectedClauses } from "@/lib/api";
+import { downloadReportPdf, setActiveClause, setSelectedClauses } from "@/lib/api";
 import type { FilterTab, RiskItem, ToastData } from "@/lib/types";
 import { useStore } from "@/store/useStore";
 import { useRouter } from "next/navigation";
@@ -37,6 +38,7 @@ export default function DashboardPage() {
   const [panelMode, setPanelMode] = useState<PanelMode>("none");
   const [panelRiskIds, setPanelRiskIds] = useState<string[]>([]);
   const [voiceClauseId, setVoiceClauseId] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   // Debounce "Ask agent" opens — suppress duplicate logs + active-clause POSTs
   // from rapid double-clicks or React StrictMode re-invokes.
@@ -167,6 +169,30 @@ export default function DashboardPage() {
     router.push("/");
   }, [clearSession, router]);
 
+  const handleDownloadPdf = useCallback(async () => {
+    if (!sessionId || pdfLoading) return;
+    setPdfLoading(true);
+    addDebugLine("info", "Preparing PDF…");
+    try {
+      await downloadReportPdf(sessionId);
+      addDebugLine("info", "PDF report downloaded");
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 404) {
+        showToast({ kind: "error", title: "Session expired", body: "Please analyze the contract again." });
+        addDebugLine("error", "PDF: session expired (404)");
+      } else if (status === 409) {
+        showToast({ kind: "error", title: "No report yet", body: "Please analyze a contract first." });
+        addDebugLine("error", "PDF: no risk report (409)");
+      } else {
+        showToast({ kind: "error", title: "PDF failed", body: "Could not generate the PDF. Please try again." });
+        addDebugLine("error", `PDF download failed: ${err?.message ?? err}`);
+      }
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [sessionId, pdfLoading, addDebugLine, showToast]);
+
   if (!_hasHydrated) return null;
   if (!riskReport || !sessionId) return null;
 
@@ -204,7 +230,22 @@ export default function DashboardPage() {
                     {riskReport.contract_type}
                   </h1>
                 </div>
-                <SeverityBadge severity={riskReport.overall_risk} />
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={pdfLoading}
+                    title="Download a PDF of this risk report"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#67a1ff] text-white text-xs font-black tracking-wide hover:bg-[#5a93f0] transition-all disabled:opacity-60 shadow-sm shadow-blue-200"
+                  >
+                    <LucideIcon
+                      name={pdfLoading ? "loader" : "download"}
+                      size={15}
+                      className={pdfLoading ? "animate-spin" : ""}
+                    />
+                    {pdfLoading ? "Preparing PDF…" : "Download PDF Report"}
+                  </button>
+                  <SeverityBadge severity={riskReport.overall_risk} />
+                </div>
               </header>
 
               <StatsGrid report={riskReport} />
