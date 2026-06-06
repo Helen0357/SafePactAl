@@ -218,11 +218,17 @@ def selected_followup(user_text: str) -> bool:
 # "download/generate/export the report as a PDF", "make a PDF", "give me a file",
 # and Arabic equivalents. Deterministic — triggers a frontend download event.
 _PDF_RE = re.compile(
+    # English: a download/export verb near pdf/report/file, or bare "pdf".
     r"\b(download|generate|create|export|make|prepare|give me|send me|get me|build)\b"
     r"[^.?!]{0,25}\b(pdf|report|file|document|copy)\b"
     r"|\bpdf\b|\bdownload (the )?report\b|\bexport (the )?report\b"
-    r"|حمّ?ل التقرير|نزّ?ل التقرير|اعمل pdf|اعمل ملف|سوّ?ي pdf|سوّ?ي ملف"
-    r"|صدّ?ر التقرير|نزل التقرير|حمل التقرير|ملف pdf|التقرير (ك)?ملف|عطني ملف",
+    # Arabic: a download/export/send verb stem near ملف/تقرير/pdf …
+    r"|(?:تنزيل|تحميل|تنزّل|تنزل|ينزل|نزّل|نزل|نزله|حمّل|حمل|حمله|صدّر|صدر|أنزل|انزل"
+    r"|ارسل|أرسل|اعمل|سوّي|سوي|عطني|اعطني|أعطني)[^.؟!]{0,15}(?:ملف|تقرير|pdf|بي دي اف)"
+    # … or "I want the report/file/pdf" …
+    r"|(?:أريد|اريد|ابغى|أبغى|بدي|عايز)[^.؟!]{0,12}(?:التقرير|تقرير|الملف|ملف|pdf)"
+    # … or bare "pdf file" / "pdf report" / "the report file".
+    r"|ملف\s*pdf|تقرير\s*pdf|ملف التقرير",
     re.IGNORECASE,
 )
 

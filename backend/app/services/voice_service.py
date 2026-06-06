@@ -522,7 +522,11 @@ class VoiceService:
             # Arabic turns get an Arabic preamble (never an English one) so the
             # spoken answer stays entirely in Arabic. Uses the effective turn
             # language (Arabic UI, Arabic text, or "in Arabic" request).
-            if resolve_response_language(user_text, getattr(session, "language", "en")) == "ar":
+            if wants_pdf(user_text):
+                # PDF intent: the agent speaks its own confirmation (EN or AR),
+                # so skip the preamble in both languages — matches the English flow.
+                preamble = ""
+            elif resolve_response_language(user_text, getattr(session, "language", "en")) == "ar":
                 preamble = "لحظة من فضلك."  # "one moment, please"
             else:
                 preamble = _select_preamble(user_text)

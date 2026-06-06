@@ -66,13 +66,27 @@ class ConversationAgent:
 
         report = session.risk_report
 
-        # 0. PDF report download ("download/generate the report as a PDF"). Pure
-        #    fast-path, no Gemini: emit a download_pdf event the frontend turns
-        #    into a direct browser download using the existing risk_report.
+        # Effective response language for this turn: the session/UI language
+        # (Arabic for an Arabic UI, even when the contract is English), unless the
+        # user explicitly asks otherwise this turn ("explain in English" / "بالعربي").
+        # Computed first so even the PDF fast path can confirm in the right language.
+        session_lang = fp.normalize_language(getattr(session, "language", "en"))
+        turn_lang = fp.resolve_response_language(user_text, session_lang)
+
+        # 0. PDF report download ("download/generate the report as a PDF", and the
+        #    Arabic equivalents like "تنزيل الملف"/"حمّل التقرير"). Pure fast-path,
+        #    no Gemini: emit a download_pdf event the frontend turns into a direct
+        #    browser download using the existing risk_report. The spoken confirmation
+        #    follows the turn language (Arabic UI / Arabic request → Arabic).
         if report and fp.wants_pdf(user_text):
+            pdf_msg = (
+                "تم تجهيز تقرير PDF لك."
+                if turn_lang == "ar"
+                else "I prepared the PDF report for you."
+            )
             yield {"type": "debug", "log": "[FastPath] generate_pdf_report (download event)"}
-            yield {"type": "sentence", "text": "I prepared the PDF report for you."}
-            yield {"type": "download_pdf", "message": "I prepared the PDF report for you."}
+            yield {"type": "sentence", "text": pdf_msg}
+            yield {"type": "download_pdf", "message": pdf_msg}
             yield {"type": "status", "state": "idle", "label": "Ready"}
             return
 
@@ -84,12 +98,6 @@ class ConversationAgent:
             async for event in self._handle_modify_message(user_text, session):
                 yield event
             return
-
-        # Effective response language for this turn: the session/UI language
-        # (Arabic for an Arabic UI, even when the contract is English), unless the
-        # user explicitly asks otherwise this turn ("explain in English" / "بالعربي").
-        session_lang = fp.normalize_language(getattr(session, "language", "en"))
-        turn_lang = fp.resolve_response_language(user_text, session_lang)
 
         # 2. Selected (multiple) clauses — persists for the whole panel session.
         #    Explicit ("explain these clauses", "write a message about these") OR a

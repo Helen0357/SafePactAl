@@ -43,10 +43,16 @@ class MessageService:
     """Generates professional messages from selected contract risks."""
 
     async def generate_message(
-        self, request: GenerateMessageRequest
+        self, request: GenerateMessageRequest, language: str = "en"
     ) -> GenerateMessageResponse:
         if not settings.is_gemini_configured:
             raise GeminiNotConfiguredError()
+
+        # Language ('ar' or 'en', from the X-Language header). For Arabic we prepend
+        # a directive to the model's extra instruction so the whole draft is written
+        # in Arabic — the chosen format (email/WhatsApp) and any user-supplied custom
+        # details (request.extra_instruction) are still honored.
+        lang = "ar" if str(language or "").strip().lower().startswith("ar") else "en"
 
         session = session_service.get_session(request.session_id)
 
@@ -71,11 +77,24 @@ class MessageService:
         tool = GenerateMessageTool()
         client = _build_gemini_client()
 
+        # For Arabic, the language directive leads so it is unambiguous, then any
+        # user-supplied custom details follow. English keeps the request as-is.
+        extra_parts = []
+        if lang == "ar":
+            extra_parts.append(
+                "Write the entire message in Arabic (العربية), using clear, natural, "
+                "professional Arabic. Keep any names, numbers, and dates accurate."
+            )
+        if request.extra_instruction:
+            extra_parts.append(request.extra_instruction)
+        extra_instruction = " ".join(extra_parts) or None
+
         logger.info(
-            "[MessageService] Generating %s/%s/%s for %d clause(s).",
+            "[MessageService] Generating %s/%s/%s (lang=%s) for %d clause(s).",
             request.message_type.value,
             request.tone.value,
             request.format.value,
+            lang,
             len(selected),
         )
 
@@ -87,7 +106,7 @@ class MessageService:
                 tone=request.tone.value,
                 format=request.format.value,
                 gemini_client=client,
-                extra_instruction=request.extra_instruction,
+                extra_instruction=extra_instruction,
             )
         except Exception as exc:
             logger.error("[MessageService] Generation failed: %s", exc)
