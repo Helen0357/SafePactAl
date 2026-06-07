@@ -31,15 +31,16 @@ We discovered that achieving sub-second latency for a conversational voice agent
 
 N/A — The core intelligence and voice capabilities are entirely built utilizing the Google Cloud and Gemini ecosystem.
 
-graph TD
+```mermaid
+flowchart TD
     A[User]
-    A -->|Uploads Contract| B(SafePact Frontend)
-    B -->|Sends Data| C(FastAPI Backend)
+    A -->|Uploads Contract| B[SafePact Frontend]
+    B -->|Sends Data| C[FastAPI Backend]
 
     C -->|Analyze Clauses| D{Gemini AI Models}
-    C -->|Generate Message| E(Message Generator)
-    C -->|Generate Report| F(PDF Report)
-    C -->|Voice Answer| G(Google Cloud TTS)
+    C -->|Generate Message| E[Message Generator]
+    C -->|Generate Report| F[PDF Report]
+    C -->|Voice Answer| G[Google Cloud TTS]
 
     D -->|Risk Report| H[Results]
     E -->|Draft Message| H
@@ -48,3 +49,4 @@ graph TD
 
     H -->|Displays Results| B
     B -->|Shows Results to User| I[Final Output]
+```
