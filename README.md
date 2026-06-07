@@ -33,9 +33,8 @@ N/A — The core intelligence and voice capabilities are entirely built utilizin
 
 ```mermaid
 flowchart TD
-    A[User]
-    A -->|Uploads Contract| B[SafePact Frontend]
-    B -->|Sends Data| C[FastAPI Backend]
+    A[User] -->|Uploads Contract| B(SafePact Frontend)
+    B -->|Sends Data| C(FastAPI Backend)
 
     C -->|Analyze Clauses| D{Gemini AI Models}
     C -->|Generate Message| E[Message Generator]
@@ -47,6 +46,6 @@ flowchart TD
     F -->|PDF File| H
     G -->|Audio| H
 
-    H -->|Displays Results| B
-    B -->|Shows Results to User| I[Final Output]
+    H -->|Displays Results| I(SafePact Frontend)
+    I -->|Shows Results to User| J[Final Output]
 ```
