@@ -31,25 +31,20 @@ We discovered that achieving sub-second latency for a conversational voice agent
 
 N/A — The core intelligence and voice capabilities are entirely built utilizing the Google Cloud and Gemini ecosystem.
 
-```mermaid
 graph TD
-    A["User"] -->|"Uploads PDF / DOCX / TXT or pastes text"| B("SafePact Frontend")
-    B -->|"Sends data — REST + voice WebSocket"| C("FastAPI Backend")
+    A[User]
+    A -->|Uploads Contract| B(SafePact Frontend)
+    B -->|Sends Data| C(FastAPI Backend)
 
-    C -->|"Extracts text"| E["Text Extraction<br/>PDF · DOCX · TXT"]
-    E -->|"Clean contract text"| D{"Gemini AI Models"}
-    D -->|"Returns structured risk report"| C
+    C -->|Analyze Clauses| D{Gemini AI Models}
+    C -->|Generate Message| E(Message Generator)
+    C -->|Generate Report| F(PDF Report)
+    C -->|Voice Answer| G(Google Cloud TTS)
 
-    C -->|"Questions · explanations · drafts"| G["Conversation Agent<br/>intent routing + fast paths"]
-    G <-->|"Reasoning"| D
-    G -->|"Answer text"| F["Google Cloud TTS<br/>Journey voice · AR and EN"]
-    F -->|"Sub-second audio"| C
+    D -->|Risk Report| H[Results]
+    E -->|Draft Message| H
+    F -->|PDF File| H
+    G -->|Audio| H
 
-    C -->|"Builds report file"| H["PDF Report Generator<br/>ReportLab"]
-    H -->|"Downloadable PDF scan report"| C
-
-    C --- I[("In-memory Session Store")]
-
-    C -->|"Risk dashboard · drafts · streamed voice · PDF"| B
-    B -->|"Displays results and speaks answers"| A
-```
+    H -->|Displays Results| B
+    B -->|Shows Results to User| I[Final Output]
