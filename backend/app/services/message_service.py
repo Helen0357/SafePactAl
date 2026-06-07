@@ -41,12 +41,18 @@ _ENGLISH_TEMPLATE_MARKERS = (
 
 
 def _is_acceptable_arabic(text: str) -> bool:
-    """An Arabic draft must contain Arabic characters AND avoid English template
-    scaffolding (Subject:, Dear, Best regards, …)."""
-    if not _has_arabic(text):
+    """An Arabic draft must (1) avoid English template scaffolding (Subject:, Dear,
+    Best regards, …) and (2) be predominantly Arabic — Arabic letters must at least
+    match the Latin letters, so an English-heavy draft with a few Arabic words is
+    rejected and routed to the deterministic Arabic fallback."""
+    if not text:
         return False
-    low = (text or "").lower()
-    return not any(marker in low for marker in _ENGLISH_TEMPLATE_MARKERS)
+    low = text.lower()
+    if any(marker in low for marker in _ENGLISH_TEMPLATE_MARKERS):
+        return False
+    arabic = sum(1 for ch in text if "؀" <= ch <= "ۿ")
+    latin = sum(1 for ch in text if "a" <= ch <= "z" or "A" <= ch <= "Z")
+    return arabic > 0 and arabic >= latin
 
 
 # Deterministic Arabic message templates — used only as a last-resort fallback if

@@ -11,9 +11,12 @@ Phase 8I follow-up — language-aware drafts + Arabic PDF voice command.
 Gemini mocked — fast, no quota.
 """
 import asyncio
+import itertools
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # tests/ → backend/ → protectme-ai-agent/ → agent/
 _AGENT_ROOT = Path(__file__).resolve().parent.parent.parent / "agent"
@@ -342,6 +345,123 @@ class TestArabicOutputGuarantee:
         prompt = mock_client.generate.call_args.kwargs["prompt"]
         assert "I have a lion" in prompt
         assert "lion" in resp.json()["draft"]
+
+
+# ── Full 24-combination matrix: every Arabic combination yields Arabic ─────────
+# 4 message types × 3 tones × 2 formats. Worst case: the model returns an English
+# email for EVERY combination — the backend must still return an Arabic draft.
+
+_TYPES = ["clarification", "negotiation", "rejection", "amendment_request"]
+_TONES = ["polite", "firm", "professional"]
+_FORMATS = ["email", "whatsapp"]
+_COMBOS = list(itertools.product(_TYPES, _TONES, _FORMATS))
+
+
+class TestArabicCombinationMatrix:
+    @pytest.mark.parametrize("mtype,tone,fmt", _COMBOS)
+    def test_arabic_combo_yields_arabic_even_if_model_english(self, mtype, tone, fmt):
+        mock_client = _mock_gemini_sequence(_EN_EMAIL, _EN_EMAIL)  # model fails twice
+        resp = _post_generate(
+            _make_session(), mock_client, headers={"X-Language": "ar"},
+            message_type=mtype, tone=tone, format=fmt,
+        )
+        assert resp.status_code == 200, f"{mtype}/{tone}/{fmt} -> {resp.status_code}"
+        draft = resp.json()["draft"]
+        assert _contains_arabic(draft), f"{mtype}/{tone}/{fmt} not Arabic"
+        assert "Subject:" not in draft
+        assert "Dear" not in draft
+        assert "Best regards" not in draft
+        if fmt == "email":
+            assert "الموضوع:" in draft          # Arabic subject label
+        else:
+            assert "الموضوع:" not in draft       # WhatsApp has no subject line
+
+    @pytest.mark.parametrize("mtype,tone,fmt", _COMBOS)
+    def test_arabic_combo_passthrough_when_model_arabic(self, mtype, tone, fmt):
+        good = "الموضوع: طلب\n\nمرحباً [اسم المستلم]،\nأود الاستفسار بخصوص بنود العقد.\n\nمع خالص التحية،\n[اسمك]"
+        mock_client = _mock_gemini(good)
+        resp = _post_generate(
+            _make_session(), mock_client, headers={"X-Language": "ar"},
+            message_type=mtype, tone=tone, format=fmt,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["draft"] == good            # good Arabic returned as-is
+        assert mock_client.generate.await_count == 1    # no wasteful retry
+
+    @pytest.mark.parametrize("mtype,tone,fmt", _COMBOS)
+    def test_english_combo_regression(self, mtype, tone, fmt):
+        mock_client = _mock_gemini(_EN_EMAIL)
+        resp = _post_generate(
+            _make_session(), mock_client, headers={"X-Language": "en"},
+            message_type=mtype, tone=tone, format=fmt,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["draft"] == _EN_EMAIL       # English unchanged
+        assert mock_client.generate.await_count == 1    # never retries for English
+
+
+# ── Backend defensive normalization of message option values ───────────────────
+
+class TestOptionNormalization:
+    @pytest.mark.parametrize("arabic,canonical", [
+        ("استفسار", "clarification"),
+        ("تفاوض", "negotiation"),
+        ("رفض", "rejection"),
+        ("تعديل", "amendment_request"),
+    ])
+    def test_arabic_message_type_label_normalized(self, arabic, canonical):
+        mock_client = _mock_gemini("الموضوع: طلب\n\nمرحباً،\nنص.\n\nمع خالص التحية،")
+        resp = _post_generate(_make_session(), mock_client, headers={"X-Language": "ar"},
+                              message_type=arabic)
+        assert resp.status_code == 200
+        assert resp.json()["message_type"] == canonical
+
+    @pytest.mark.parametrize("arabic,canonical", [
+        ("لطيف", "polite"), ("حازم", "firm"), ("رسمي", "professional"),
+    ])
+    def test_arabic_tone_label_normalized(self, arabic, canonical):
+        mock_client = _mock_gemini("الموضوع: طلب\n\nمرحباً،\nنص.\n\nمع خالص التحية،")
+        resp = _post_generate(_make_session(), mock_client, headers={"X-Language": "ar"},
+                              tone=arabic)
+        assert resp.status_code == 200
+        assert resp.json()["tone"] == canonical
+
+    @pytest.mark.parametrize("arabic,canonical", [
+        ("بريد", "email"), ("إيميل", "email"), ("واتساب", "whatsapp"), ("رسالة", "whatsapp"),
+    ])
+    def test_arabic_format_label_normalized(self, arabic, canonical):
+        mock_client = _mock_gemini("الموضوع: طلب\n\nمرحباً،\nنص.\n\nمع خالص التحية،")
+        resp = _post_generate(_make_session(), mock_client, headers={"X-Language": "ar"},
+                              format=arabic)
+        assert resp.status_code == 200
+        assert resp.json()["format"] == canonical
+
+    def test_english_canonical_values_unchanged(self):
+        mock_client = _mock_gemini(_EN_EMAIL)
+        resp = _post_generate(_make_session(), mock_client, headers={"X-Language": "en"},
+                              message_type="negotiation", tone="firm", format="whatsapp")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["message_type"] == "negotiation"
+        assert body["tone"] == "firm"
+        assert body["format"] == "whatsapp"
+
+    def test_english_display_label_aliases_normalized(self):
+        # Defensive: even English display labels ("Clarify"/"Pro") map to canonical.
+        mock_client = _mock_gemini(_EN_EMAIL)
+        resp = _post_generate(_make_session(), mock_client, headers={"X-Language": "en"},
+                              message_type="Clarify", tone="Pro", format="Email")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["message_type"] == "clarification"
+        assert body["tone"] == "professional"
+        assert body["format"] == "email"
+
+    def test_unknown_value_still_rejected(self):
+        mock_client = _mock_gemini(_EN_EMAIL)
+        resp = _post_generate(_make_session(), mock_client, headers={"X-Language": "en"},
+                              message_type="totally_invalid")
+        assert resp.status_code == 422  # unknown values still fail enum validation
 
 
 # ── Arabic PDF voice command → download_pdf event (Issue 2) ────────────────────
