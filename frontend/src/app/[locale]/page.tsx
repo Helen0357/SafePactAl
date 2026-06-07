@@ -115,24 +115,24 @@ export default function LandingPage() {
       <main className="wrap landing">
         {/* Hero Section */}
         <div className="text-center mb-10 space-y-2">
-          <span className="inline-block px-4 py-1.5 rounded-full bg-[#67a1ff10] text-[#333] text-xs font-medium tracking-widest animate-fade-in">
+          <span className="inline-block px-4 py-1.5 rounded-full bg-[#67a1ff10] text-[#333] text-xs font-medium tracking-widest animate-fade-in rtl:mb-3">
             {t("hero.eyebrow")}
           </span>
 
-          <h1 className="text-5xl md:text-6xl font-black text-[#252525] tracking-tight leading-[1.1]">
+          <h1 className="text-5xl ltr:md:text-6xl rtl:md:text-5xl font-black text-[#252525] ltr:tracking-tight ltr:leading-[1.1] flex flex-col rtl:gap-5">
             {t("hero.title_main")} <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7aadff] to-[#67a1ff8f]">
+            <span className=" text-[#9ac1ff] ">
               {t("hero.title_highlight")}
             </span>
           </h1>
 
-          <p className="max-w-xl mx-auto text-sm pt-2 text-[#333] leading-relaxed">
+          <p className="max-w-xl mx-auto text-sm ltr:pt-2 rtl:pt-6 text-[#333] leading-relaxed">
             {t("hero.description")}
           </p>
         </div>
 
         <div className="max-w-5xl mx-auto fade-up">
-          <div className="flex p-1.5 bg-white rounded-full shadow-sm mb-4 max-w-xs mx-auto border border-slate-200">
+          <div className="flex p-1.5 bg-white rounded-full shadow-sm mb-5 max-w-xs mx-auto border border-slate-200">
             <button
               className={`flex-1 flex items-center justify-center gap-2 py-2 !rounded-full text-sm font-medium transition-all ${tab === "file" ? "bg-[#7aadff] text-white shadow-md" : "text-slate-400 hover:text-slate-600"}`}
               onClick={() => setTab("file")}

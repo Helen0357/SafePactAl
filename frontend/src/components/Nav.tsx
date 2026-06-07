@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/Button";
 import { LucideIcon } from "@/components/ui/Icon";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { useLocale, useTranslations } from "next-intl";
+import Image from "next/image";
 
 interface NavProps {
   onHome?: () => void;
@@ -35,17 +36,11 @@ export function Nav({ onHome, showNewContract }: NavProps) {
           onClick={onHome}
           aria-label={t("go_home")}
         >
-          <div className="relative w-8 h-8 flex items-center justify-center rounded-xs bg-gradient-to-br from-[#67a1ff] via-[#7aadff] to-cyan-500 shadow-lg shadow-blue-200/50 group-hover:scale-105 transition-transform">
+          {/* <div className="relative w-8 h-8 flex items-center justify-center rounded-xs bg-gradient-to-br from-[#67a1ff] via-[#7aadff] to-cyan-500 shadow-lg shadow-blue-200/50 group-hover:scale-105 transition-transform">
             <LucideIcon name="shield-check" size={20} color="#fff" />
             <div className="absolute inset-0 bg-white/10 rounded-[12px] pointer-events-none" />
-          </div>
-
-          <span className="text-xl font-bold tracking-tight text-slate-900">
-            Protect<span className="text-[#67a1ff] italic">Me</span>
-            <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-bold uppercase tracking-widest align-top">
-              AI
-            </span>
-          </span>
+          </div> */}
+          <Image src="/logo.png" alt="logo" width={180} height={60} />
         </button>
 
         <div className="nav-links">

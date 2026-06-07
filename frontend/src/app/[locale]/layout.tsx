@@ -1,14 +1,11 @@
-import type { Metadata } from "next";
-import {
-  Plus_Jakarta_Sans,
-  JetBrains_Mono,
-  IBM_Plex_Sans_Arabic,
-  Tajawal,
-  Almarai,
-} from "next/font/google";
 import "@/styles/globals.css";
+import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
+import {
+  Almarai,
+  Plus_Jakarta_Sans
+} from "next/font/google";
 
 // إعداد الخط الإنجليزي
 const jakartaSans = Plus_Jakarta_Sans({
@@ -24,9 +21,9 @@ const almarai = Almarai({
   display: "swap",
 });
 export const metadata: Metadata = {
-  title: "ProtectMe AI — Understand before you sign",
+  title: "SafePact AI — Understand before you sign",
   description:
-    "ProtectMe AI reads your rental, bank, subscription, or service agreement and shows you every risk — in plain language. Then you can ask questions before you commit.",
+    "SafePact AI reads your rental, bank, subscription, or service agreement and shows you every risk — in plain language. Then you can ask questions before you commit.",
 };
 
 export default async function RootLayout({

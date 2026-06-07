@@ -12,7 +12,7 @@
       "eyebrow": "Next-Gen Contract Intelligence",
       "title_main": "Understand before",
       "title_highlight": "you sign",
-      "description": "ProtectMe AI analyzes every clause in seconds, highlighting risks in plain language so you can sign with total confidence."
+      "description": "SafePact AI analyzes every clause in seconds, highlighting risks in plain language so you can sign with total confidence."
     },
     "tabs": {
       "file": "Upload File",
@@ -69,7 +69,7 @@
     }
   },
   "Disclaimer": {
-    "text": "ProtectMe AI helps you understand contracts. It does not replace a lawyer or provide legal advice."
+    "text": "SafePact AI helps you understand contracts. It does not replace a lawyer or provide legal advice."
   },
   "Dashboard": {
     "header": {
@@ -126,7 +126,7 @@
     "button_generate": "Generate Message",
     "button_regenerate": "Regenerate Draft",
     "ai_response": "AI Response",
-    "text": "ProtectMe AI helps you understand contracts. It does not replace a lawyer or provide legal advice.",
+    "text": "SafePact AI helps you understand contracts. It does not replace a lawyer or provide legal advice.",
     "tooltips": {
       "copy": "Copy to Clipboard",
       "shorter": "Make Shorter",
@@ -180,7 +180,7 @@
       "title": "AI Draft Ready",
       "copy": "Copy"
     },
-    "footer": "Privacy Protected AI Session",
+    "footer": "Privacy SafePact AI Session",
     "errors": {
       "connection_lost": "Connection Lost",
       "backend_offline": "Backend Offline",

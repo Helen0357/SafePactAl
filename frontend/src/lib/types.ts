@@ -36,7 +36,11 @@ export interface DebugLine {
 
 export type FilterTab = "all" | "high" | "medium" | "low";
 
-export type MessageType = "clarification" | "negotiation" | "rejection" | "amendment_request";
+export type MessageType =
+  | "clarification"
+  | "negotiation"
+  | "rejection"
+  | "amendment_request";
 export type MessageTone = "polite" | "firm" | "professional";
 export type MessageFormat = "email" | "whatsapp";
 
@@ -87,9 +91,12 @@ export interface TranscriptEntry {
   kind: "text" | "draft" | "error";
 }
 
-export const SEVERITY_META: Record<string, { label: string; icon: string; cssKey: string }> = {
-  High:   { label: "High",   icon: "shield-alert",  cssKey: "high" },
-  Medium: { label: "Medium", icon: "alert-circle",  cssKey: "medium" },
-  Low:    { label: "Low",    icon: "check-circle",  cssKey: "low" },
-  Minimal:{ label: "Minimal",icon: "check-circle",  cssKey: "low" },
+export const SEVERITY_META: Record<
+  string,
+  { label: string; icon: string; cssKey: string }
+> = {
+  High: { label: "High", icon: "shield-alert", cssKey: "high" },
+  Medium: { label: "Medium", icon: "alert-circle", cssKey: "medium" },
+  Low: { label: "Low", icon: "check-circle", cssKey: "low" },
+  Minimal: { label: "Minimal", icon: "check-circle", cssKey: "low" },
 };

@@ -78,7 +78,7 @@ export async function setSelectedClauses(
   });
 }
 
-export const REPORT_PDF_FILENAME = "ProtectMe_AI_Risk_Report.pdf";
+export const REPORT_PDF_FILENAME = "SafePact_AI_Risk_Report.pdf";
 
 /** Trigger a direct browser download for an in-memory blob (no server storage). */
 function triggerBlobDownload(blob: Blob, filename: string): void {

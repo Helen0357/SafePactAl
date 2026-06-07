@@ -124,7 +124,7 @@ export function Dropzone({
           <div className=" rounded-[24px] text-[#7aadff8c] flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-500">
             <LucideIcon name="upload" size={36} />
           </div>
-          <h3 className="text-lg font-black text-[#252525] mb-1 tracking-tight">
+          <h3 className="text-lg font-black text-[#252525] mb-2 tracking-tight">
             {t("idle.title")}
           </h3>
           <p className="text-slate-400 text-sm  mb-4 leading-relaxed">
