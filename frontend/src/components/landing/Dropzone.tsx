@@ -13,7 +13,7 @@ interface DropzoneProps {
   progress: number;
 }
 
-const ACCEPTED = /\.(pdf|txt)$/i;
+const ACCEPTED = /\.(pdf|docx|txt)$/i;
 
 export function Dropzone({
   onFile,
@@ -64,7 +64,7 @@ export function Dropzone({
       <input
         ref={inputRef}
         type="file"
-        accept=".pdf,.txt"
+        accept=".pdf,.docx,.txt"
         className="hidden"
         onChange={(e) => handleFile(e.target.files?.[0])}
       />

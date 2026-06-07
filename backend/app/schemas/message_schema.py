@@ -60,6 +60,9 @@ class GenerateMessageRequest(BaseModel):
     tone: MessageTone = MessageTone.PROFESSIONAL
     format: MessageFormat = MessageFormat.EMAIL
     extra_instruction: Optional[str] = None
+    # Draft language ('ar' | 'en'). Sent in the body as the primary, reliable
+    # channel (headers can be stripped/lag); the X-Language header is the backup.
+    language: Optional[str] = None
 
     @field_validator("message_type", mode="before")
     @classmethod

@@ -32,6 +32,25 @@ def _has_arabic(text: str) -> bool:
     return any("؀" <= ch <= "ۿ" for ch in (text or ""))
 
 
+def _clamp_lang(value) -> str:
+    """Clamp any value to the allowed draft languages: 'ar' or 'en'."""
+    return "ar" if str(value or "").strip().lower().startswith("ar") else "en"
+
+
+def _resolve_language(body_lang, header_lang, session_lang):
+    """Resolve the draft language with priority:
+    request body 'language' > X-Language header > session language > 'en'.
+    Returns (lang, source) so the source can be logged."""
+    for value, source in (
+        (body_lang, "body"),
+        (header_lang, "header"),
+        (session_lang, "session"),
+    ):
+        if value is not None and str(value).strip():
+            return _clamp_lang(value), source
+    return "en", "default"
+
+
 # English email/letter scaffolding that must NEVER appear in an Arabic draft.
 _ENGLISH_TEMPLATE_MARKERS = (
     "subject:", "dear ", "best regards", "kind regards", "warm regards",
@@ -130,21 +149,27 @@ class MessageService:
     """Generates professional messages from selected contract risks."""
 
     async def generate_message(
-        self, request: GenerateMessageRequest, language: str = "en"
+        self, request: GenerateMessageRequest, header_language: str | None = None
     ) -> GenerateMessageResponse:
         if not settings.is_gemini_configured:
             raise GeminiNotConfiguredError()
-
-        # Language ('ar' or 'en', from the X-Language header). For Arabic the prompt
-        # builder adds a strong Arabic-only directive (subject/greeting/body/closing
-        # all in Arabic). The chosen format (email/WhatsApp) and any user-supplied
-        # custom details (request.extra_instruction) are still honored.
-        lang = "ar" if str(language or "").strip().lower().startswith("ar") else "en"
 
         session = session_service.get_session(request.session_id)
 
         if not session.risk_report:
             raise NoRiskReportError()
+
+        # Resolve the draft language. The body field is the primary channel (the
+        # X-Language header can be stripped or lag during navigation), then header,
+        # then the session language, then 'en'. For Arabic the prompt builder adds a
+        # strong Arabic-only directive; the chosen format (email/WhatsApp) and any
+        # user-supplied custom details (request.extra_instruction) are still honored.
+        lang, lang_source = _resolve_language(
+            getattr(request, "language", None),
+            header_language,
+            getattr(session, "language", None),
+        )
+        logger.info("[GenerateMessage] resolved_language=%s source=%s", lang, lang_source)
 
         risks = session.risk_report.get("risks", [])
         risk_map = {r["id"]: r for r in risks}

@@ -19,6 +19,9 @@ google-cloud-texttospeech>=2.16.0
 # ── PDF extraction ────────────────────────────────────────
 PyMuPDF>=1.24.0
 
+# ── DOCX (Word) extraction ────────────────────────────────
+python-docx>=1.1.0
+
 # ── PDF report generation (Phase 8I — downloadable risk report) ──
 reportlab>=4.0.0
 # Arabic PDF shaping (optional — Arabic renders correctly when an Arabic TTF is

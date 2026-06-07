@@ -8,11 +8,6 @@ from app.schemas.message_schema import GenerateMessageRequest, GenerateMessageRe
 router = APIRouter()
 
 
-def _norm_lang(value: Optional[str]) -> str:
-    """Clamp the X-Language header to the allowed set: 'ar' or 'en' (default 'en')."""
-    return "ar" if str(value or "").strip().lower().startswith("ar") else "en"
-
-
 @router.post(
     "/generate-message",
     response_model=GenerateMessageResponse,
@@ -20,12 +15,12 @@ def _norm_lang(value: Optional[str]) -> str:
     description=(
         "Generate a professional message (email or WhatsApp) targeting one or more "
         "identified contract risks. Supports clarification, negotiation, rejection, "
-        "and amendment request types. Phase 3 implementation. The X-Language header "
-        "('ar' or 'en') controls the language of the generated draft."
+        "and amendment request types. The draft language is resolved with priority: "
+        "request body 'language' > X-Language header > session language > 'en'."
     ),
 )
 async def generate_message(
     request: GenerateMessageRequest,
     x_language: Optional[str] = Header(None, alias="X-Language"),
 ):
-    return await handle_generate_message(request, language=_norm_lang(x_language))
+    return await handle_generate_message(request, header_language=x_language)

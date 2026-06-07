@@ -464,6 +464,95 @@ class TestOptionNormalization:
         assert resp.status_code == 422  # unknown values still fail enum validation
 
 
+# ── Language resolution: body > header > session > default ─────────────────────
+# The request BODY 'language' is the primary, reliable channel (the X-Language
+# header can be stripped or lag during navigation in the real browser).
+
+def _make_session_lang(lang) -> str:
+    s = Session(risk_report=REPORT, contract_text="x", language=lang)
+    session_repository.create(s)
+    return s.session_id
+
+
+class TestLanguageResolution:
+    def test_resolve_priority_unit(self):
+        from app.services.message_service import _resolve_language as r
+        assert r("ar", None, None) == ("ar", "body")
+        assert r("en", "ar", "ar") == ("en", "body")     # body wins over header/session
+        assert r(None, "ar", None) == ("ar", "header")
+        assert r(None, None, "ar") == ("ar", "session")
+        assert r(None, None, None) == ("en", "default")
+        assert r("", "", "") == ("en", "default")          # blanks skipped
+        assert r("AR-SA", None, None) == ("ar", "body")     # clamped to ar
+
+    def test_body_language_ar_email_yields_arabic(self):
+        # No header at all — body language=ar must still produce Arabic.
+        mock_client = _mock_gemini_sequence(_EN_EMAIL, _EN_EMAIL)
+        resp = _post_generate(_make_session(), mock_client, language="ar", format="email")
+        assert resp.status_code == 200
+        draft = resp.json()["draft"]
+        assert _contains_arabic(draft) and "الموضوع:" in draft
+        assert "Subject:" not in draft
+
+    def test_body_language_ar_whatsapp_yields_arabic(self):
+        mock_client = _mock_gemini_sequence(_EN_EMAIL, _EN_EMAIL)
+        resp = _post_generate(_make_session(), mock_client, language="ar", format="whatsapp")
+        assert resp.status_code == 200
+        draft = resp.json()["draft"]
+        assert _contains_arabic(draft) and "الموضوع:" not in draft
+
+    def test_header_only_ar_still_works(self):
+        mock_client = _mock_gemini_sequence(_EN_EMAIL, _EN_EMAIL)
+        resp = _post_generate(_make_session(), mock_client, headers={"X-Language": "ar"})
+        assert resp.status_code == 200
+        assert _contains_arabic(resp.json()["draft"])
+
+    def test_body_overrides_header(self):
+        # body=ar beats header=en → Arabic.
+        mock_client = _mock_gemini_sequence(_EN_EMAIL, _EN_EMAIL)
+        resp = _post_generate(_make_session(), mock_client, headers={"X-Language": "en"},
+                              language="ar")
+        assert resp.status_code == 200
+        assert _contains_arabic(resp.json()["draft"])
+
+    def test_body_en_overrides_header_ar(self):
+        # body=en beats header=ar → English (returned unchanged, no retry).
+        mock_client = _mock_gemini(_EN_EMAIL)
+        resp = _post_generate(_make_session(), mock_client, headers={"X-Language": "ar"},
+                              language="en")
+        assert resp.status_code == 200
+        assert resp.json()["draft"] == _EN_EMAIL
+        assert mock_client.generate.await_count == 1
+
+    def test_session_language_fallback_ar(self):
+        # No body, no header — falls back to the session language (ar).
+        mock_client = _mock_gemini_sequence(_EN_EMAIL, _EN_EMAIL)
+        resp = _post_generate(_make_session_lang("ar"), mock_client)
+        assert resp.status_code == 200
+        assert _contains_arabic(resp.json()["draft"])
+
+    def test_default_english_when_nothing_set(self):
+        mock_client = _mock_gemini(_EN_EMAIL)
+        resp = _post_generate(_make_session_lang("en"), mock_client)
+        assert resp.status_code == 200
+        assert resp.json()["draft"] == _EN_EMAIL
+
+    def test_arabic_ui_english_contract_body(self):
+        # Arabic UI (body=ar) + English contract content → Arabic draft.
+        mock_client = _mock_gemini_sequence(_EN_EMAIL, _EN_EMAIL)
+        resp = _post_generate(_make_session(), mock_client, language="ar")
+        assert resp.status_code == 200
+        assert _contains_arabic(resp.json()["draft"])
+
+    def test_english_ui_arabic_contract_body(self):
+        # English UI (body=en) + Arabic contract content → English draft.
+        mock_client = _mock_gemini(_EN_EMAIL)
+        resp = _post_generate(_make_ar_report_session(), mock_client, language="en")
+        assert resp.status_code == 200
+        assert resp.json()["draft"] == _EN_EMAIL
+        assert mock_client.generate.await_count == 1
+
+
 # ── Arabic PDF voice command → download_pdf event (Issue 2) ────────────────────
 
 class TestArabicPdfVoiceCommand:

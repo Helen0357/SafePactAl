@@ -8,11 +8,12 @@ logger = logging.getLogger(__name__)
 
 async def handle_generate_message(
     request: GenerateMessageRequest,
-    language: str = "en",
+    header_language: str | None = None,
 ) -> GenerateMessageResponse:
     """Call message_service and return the generated draft.
 
-    ``language`` ('ar' or 'en', from the X-Language header) controls the
-    language of the generated draft.
+    ``header_language`` is the raw X-Language header (or None). The service
+    resolves the final draft language with priority: request body 'language' >
+    header > session language > 'en'.
     """
-    return await message_service.generate_message(request, language=language)
+    return await message_service.generate_message(request, header_language=header_language)

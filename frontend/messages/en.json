@@ -24,7 +24,7 @@
   "Dropzone": {
     "idle": {
       "title": "Drop your contract",
-      "subtitle": "Securely upload your agreement to start the risk analysis.",
+      "subtitle": "Securely upload your agreement (PDF, DOCX, or TXT) to start the risk analysis.",
       "button": "Select Document",
       "sample_link": "Looking for an example?",
       "sample_action": "Try a sample lease"
@@ -36,7 +36,7 @@
     },
     "error": {
       "title": "Unsupported file type",
-      "subtitle": "Please use PDF or TXT files for the best analysis results.",
+      "subtitle": "Please use PDF, DOCX, or TXT files for the best analysis results.",
       "button": "Try another file"
     }
   },

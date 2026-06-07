@@ -46,11 +46,13 @@ export async function generateMessage(
   req: GenerateMessageRequest,
   language?: string,
 ): Promise<GenerateMessageResponse> {
-  // The draft language follows the website language. Pass it explicitly so it
-  // never depends on the (possibly stale) <html lang> attribute.
+  // The draft language follows the website language. Send it both in the request
+  // BODY (primary, reliable) and the X-Language header (backup) so it never depends
+  // on the (possibly stale) <html lang> attribute or a stripped header.
+  const body = language ? { ...req, language } : req;
   const { data } = await api.post<GenerateMessageResponse>(
     "/api/actions/generate-message",
-    req,
+    body,
     language ? { headers: { "X-Language": language } } : undefined,
   );
   return data;

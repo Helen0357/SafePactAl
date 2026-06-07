@@ -17,7 +17,7 @@ and returns a structured risk report, and you can review the risks, generate
 messages about them, and *talk to a voice agent* for follow‑up questions.
 
 **Main features**
-- **Contract upload / paste** — drop a PDF or paste text on the landing page.
+- **Contract upload / paste** — drop a PDF, DOCX, or TXT file, or paste text on the landing page.
 - **Risk dashboard** — overall risk, stats, severity filters, and search.
 - **All detected risks** — every risk is shown (no "top 3" limit), each card with:
   original clause · in plain terms · why it matters · question to ask · suggested action.
@@ -102,8 +102,10 @@ pip install -r requirements.txt
 
 `requirements.txt` already includes everything needed:
 fastapi · uvicorn · pydantic · pydantic‑settings · google‑genai ·
-google‑cloud‑texttospeech · PyMuPDF · python‑multipart · python‑dotenv ·
+google‑cloud‑texttospeech · PyMuPDF · python‑docx · python‑multipart · python‑dotenv ·
 httpx · websockets · pytest · pytest‑asyncio.
+
+Supported contract upload formats: **PDF** (`.pdf`), **Word** (`.docx`), **Text** (`.txt`).
 
 ---
 

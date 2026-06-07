@@ -59,7 +59,10 @@ export function MessagePanel({
   const callGenerate = useCallback(
     async (extraInstruction?: string) => {
       setIsLoading(true);
-      onDebugLine("info", `Generate message language=${locale}`);
+      onDebugLine(
+        "info",
+        `[GenerateMessage] language=${locale} format=${format} type=${messageType} tone=${tone}`,
+      );
       try {
         const result = await generateMessage(
           {

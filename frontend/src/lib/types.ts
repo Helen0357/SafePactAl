@@ -47,6 +47,7 @@ export interface GenerateMessageRequest {
   tone: MessageTone;
   format: MessageFormat;
   extra_instruction?: string;
+  language?: string; // 'ar' | 'en' — draft language (website language)
 }
 
 export interface GenerateMessageResponse {

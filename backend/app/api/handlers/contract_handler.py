@@ -22,15 +22,23 @@ async def handle_analyze_contract(
         content = await file.read()
         if not content:
             raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-        filename = file.filename or "contract.pdf"
-        if filename.lower().endswith(".txt"):
+        filename = file.filename or "contract"
+        lower = filename.lower()
+        if lower.endswith(".txt"):
             try:
                 text_content = content.decode("utf-8")
             except UnicodeDecodeError:
                 text_content = content.decode("latin-1", errors="replace")
             session = await contract_service.analyze_from_text(text_content, language=language)
-        else:
+        elif lower.endswith(".docx"):
+            session = await contract_service.analyze_from_docx(content, filename, language=language)
+        elif lower.endswith(".pdf"):
             session = await contract_service.analyze_from_pdf(content, filename, language=language)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported file type. Please upload a PDF, DOCX, or TXT file.",
+            )
     elif text and text.strip():
         session = await contract_service.analyze_from_text(text.strip(), language=language)
     else:

@@ -22,7 +22,7 @@ from app.core.exceptions import (
 )
 from app.repositories.session_repository import session_repository
 from app.schemas.session_schema import Session
-from app.utils.file_utils import extract_text_from_pdf
+from app.utils.file_utils import extract_text_from_docx, extract_text_from_pdf
 from app.utils.text_utils import clean_contract_text, truncate_contract_text
 
 logger = logging.getLogger(__name__)
@@ -105,6 +105,21 @@ class ContractService:
         logger.info("[Agent] PDF upload received — extracting text from '%s'.", filename)
         try:
             text = extract_text_from_pdf(file_bytes)
+        except ValueError as exc:
+            raise InvalidContractError(str(exc)) from exc
+        except RuntimeError as exc:
+            raise ContractAnalysisError(str(exc)) from exc
+
+        return await self.analyze_from_text(text, language=language)
+
+    async def analyze_from_docx(self, file_bytes: bytes, filename: str, language: str = "en") -> Session:
+        """Extract text from a Word (.docx) file and run the standard analysis pipeline."""
+        if not settings.is_gemini_configured:
+            raise GeminiNotConfiguredError()
+
+        logger.info("[Agent] DOCX upload received — extracting text from '%s'.", filename)
+        try:
+            text = extract_text_from_docx(file_bytes)
         except ValueError as exc:
             raise InvalidContractError(str(exc)) from exc
         except RuntimeError as exc:
