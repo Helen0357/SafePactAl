@@ -31,7 +31,12 @@ export const useStore = create<AppStore>()(
         set({ sessionId, riskReport, selectedIds: [], debugLines: [] }),
 
       clearSession: () =>
-        set({ sessionId: null, riskReport: null, selectedIds: [], debugLines: [] }),
+        set({
+          sessionId: null,
+          riskReport: null,
+          selectedIds: [],
+          debugLines: [],
+        }),
 
       toggleSelect: (id) =>
         set((state) => {

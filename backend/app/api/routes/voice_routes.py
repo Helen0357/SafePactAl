@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from app.core.exceptions import GeminiNotConfiguredError, SessionNotFoundError
 from app.services.voice_service import voice_service
@@ -10,7 +10,11 @@ router = APIRouter()
 
 
 @router.websocket("/ws/voice/{session_id}")
-async def voice_websocket(websocket: WebSocket, session_id: str):
+async def voice_websocket(
+    websocket: WebSocket,
+    session_id: str,
+    language: str = Query("en", description="UI language: 'en' or 'ar'"),
+):
     """
     Real-time bidirectional voice agent session.
 
@@ -30,9 +34,10 @@ async def voice_websocket(websocket: WebSocket, session_id: str):
       {type: "error",       message: "..."}
     """
     await websocket.accept()
-    logger.info("WS connected — session: %s", session_id)
+    lang = "ar" if str(language or "").strip().lower().startswith("ar") else "en"
+    logger.info("WS connected — session: %s (lang=%s)", session_id, lang)
     try:
-        await voice_service.handle_voice_session(session_id, websocket)
+        await voice_service.handle_voice_session(session_id, websocket, language=lang)
     except SessionNotFoundError as exc:
         await websocket.send_json({"type": "error", "message": exc.message})
         await websocket.close(code=1008)

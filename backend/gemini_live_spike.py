@@ -23,11 +23,9 @@ import wave
 from pathlib import Path
 from typing import Optional
 
-# Load .env from backend/
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
-# Expose agent package
 _AGENT_ROOT = Path(__file__).parent.parent / "agent"
 if str(_AGENT_ROOT) not in sys.path:
     sys.path.insert(0, str(_AGENT_ROOT))
@@ -38,13 +36,12 @@ GEMINI_API_KEY  = os.environ.get("GEMINI_API_KEY", "")
 # Phase 5 confirmed gemini-2.5-flash-native-audio-latest connects via bidiGenerateContent.
 # gemini-2.0-flash-live-001 requires v1 API (not available in AI Studio v1beta).
 LIVE_MODEL_CANDIDATES = [
-    "gemini-2.5-flash-native-audio-latest",        # Phase 5 confirmed — connects
-    "gemini-live-2.5-flash-preview",               # preview
+    "gemini-2.5-flash-native-audio-latest",        
+    "gemini-live-2.5-flash-preview",              
     "gemini-2.5-flash-preview-native-audio-dialog",
-    os.environ.get("GEMINI_LIVE_MODEL", ""),       # override from .env
+    os.environ.get("GEMINI_LIVE_MODEL", ""),      
 ]
-# LIVE_MODEL is set after discovering which one connects (see run_spike)
-VOICE_NAME      = "Charon"   # Gemini voice — same as fallback TTS for apples-to-apples
+VOICE_NAME      = "Charon"   
 
 # ── Sample contract context ────────────────────────────────────────────────────
 SAMPLE_SYSTEM = """\
@@ -67,9 +64,9 @@ TEST_QUESTIONS = [
 # ── Audio helpers ──────────────────────────────────────────────────────────────
 _SAMPLE_RATE  = 24_000
 _CHANNELS     = 1
-_SAMPLE_WIDTH = 2   # 16-bit
+_SAMPLE_WIDTH = 2   
 
-_PCM_BUFFER_MS = 300  # send a WAV chunk every 300ms of audio
+_PCM_BUFFER_MS = 300  
 _PCM_BUFFER_BYTES = _SAMPLE_RATE * _SAMPLE_WIDTH * _CHANNELS * _PCM_BUFFER_MS // 1000
 
 
@@ -90,12 +87,10 @@ def _wav_duration_ms(wav: bytes) -> int:
 
 def _extract_pcm(response) -> Optional[bytes]:
     """Extract raw PCM bytes from a Gemini Live response (handles SDK variations)."""
-    # Pattern 1: response.data shorthand (some SDK builds)
     d = getattr(response, "data", None)
     if d and isinstance(d, bytes):
         return d
 
-    # Pattern 2: server_content.model_turn.parts[].inline_data.data
     sc = getattr(response, "server_content", None)
     if sc:
         mt = getattr(sc, "model_turn", None)
@@ -197,7 +192,6 @@ async def run_spike():
         return
 
     # ── Discover which model is available ──────────────────────
-    # Try each candidate; use first one that connects successfully.
     live_model = None
     for candidate in LIVE_MODEL_CANDIDATES:
         if not candidate:
@@ -234,7 +228,6 @@ async def run_spike():
                     stats["question"] = question
                     results.append(stats)
 
-                    # Save audio sample for listening
                     if stats["all_pcm"]:
                         wav = _pcm_to_wav(stats["all_pcm"])
                         audio_dur = _wav_duration_ms(wav)
@@ -271,7 +264,6 @@ async def run_spike():
         print(f"Avg total response time : {avg_total:.2f}s")
         print()
 
-        # Latency judgement
         print("Latency assessment vs threshold:")
         print(f"  < 1.5s first audio : {'PASS' if avg_first < 1.5 else 'FAIL'}")
         print(f"  < 3.0s first audio : {'PASS' if avg_first < 3.0 else 'FAIL'}")

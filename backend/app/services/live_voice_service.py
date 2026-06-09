@@ -53,12 +53,11 @@ from app.repositories.session_repository import session_repository
 logger = logging.getLogger(__name__)
 
 # ── Audio constants ───────────────────────────────────────────────────────────
-_IN_SAMPLE_RATE   = 16_000   # browser sends PCM at this rate
-_OUT_SAMPLE_RATE  = 24_000   # Gemini Live outputs PCM at this rate
+_IN_SAMPLE_RATE   = 16_000   
+_OUT_SAMPLE_RATE  = 24_000  
 _OUT_CHANNELS     = 1
-_OUT_SAMPLE_WIDTH = 2        # 16-bit
+_OUT_SAMPLE_WIDTH = 2       
 
-# 300ms of output PCM per WAV chunk sent to browser
 _PCM_CHUNK_BYTES  = _OUT_SAMPLE_RATE * _OUT_SAMPLE_WIDTH * _OUT_CHANNELS * 300 // 1000
 
 _LIVE_MODEL_DEFAULT = "gemini-2.5-flash-native-audio-latest"
@@ -66,7 +65,6 @@ _LIVE_VOICE         = "Charon"
 
 _IN_MIME = f"audio/pcm;rate={_IN_SAMPLE_RATE}"
 
-# Draft/write intent detection in model's spoken text
 _DRAFT_RE = re.compile(
     r"\b(draft|write|compose|prepare|create)\b",
     re.IGNORECASE,
@@ -314,16 +312,11 @@ async def _ws_to_live(
                 if pcm:
                     stats["in_chunks"] += 1
                     n = stats["in_chunks"]
-                    # Emit a debug event on the first chunk and every ~3s afterwards
-                    # (chunks arrive ~every 128ms; logging each would flood the terminal).
                     if n == 1 or n % 25 == 0:
                         await _send_debug(
                             websocket, send_lock,
                             f"[Live] received audio_input chunk #{n}",
                         )
-                    # Realtime audio goes through the `audio=` kwarg as a SINGLE Blob.
-                    # (`media=` is typed for image/video; passing a list there fails
-                    # model_validate and kills the session after the first chunk.)
                     await live_session.send_realtime_input(
                         audio=types.Blob(data=pcm, mime_type=_IN_MIME)
                     )
@@ -331,7 +324,7 @@ async def _ws_to_live(
             elif msg_type in ("text_input", "transcript"):
                 text = data.get("text", "").strip()
                 if text:
-                    turn_state["user_text"] = text   # for draft-intent detection
+                    turn_state["user_text"] = text  
                     await live_session.send_client_content(
                         turns=[types.Content(
                             parts=[types.Part(text=text)],
@@ -345,9 +338,6 @@ async def _ws_to_live(
                         })
 
             elif msg_type == "end_audio_turn":
-                # Push-to-talk: the user released the mic. Signal end-of-audio so
-                # automatic VAD finalizes the turn and the model replies now,
-                # even though no trailing silence was streamed. Keep the session open.
                 try:
                     await live_session.send_realtime_input(audio_stream_end=True)
                     await _send_debug(websocket, send_lock, "[Live] audio_stream_end sent (mic released)")
@@ -397,11 +387,11 @@ async def _live_to_ws(
         while not stop.is_set():
             seq: int              = 0
             pcm_buf: bytes        = b""
-            user_transcript: str  = ""   # accumulated user speech (mic mode)
+            user_transcript: str  = ""  
             t_first_audio: Optional[float] = None
             t_turn_start: float   = 0.0
             in_turn: bool         = False
-            got_any: bool         = False   # did this receive() yield anything?
+            got_any: bool         = False   
 
             async for response in live_session.receive():
                 got_any = True
@@ -431,7 +421,6 @@ async def _live_to_ws(
 
                     pcm_buf += pcm
 
-                    # Flush when buffer has ≥300ms of audio
                     if len(pcm_buf) >= _PCM_CHUNK_BYTES:
                         wav = _pcm_to_wav(pcm_buf)
                         dur = _wav_duration_ms(wav)
@@ -456,20 +445,16 @@ async def _live_to_ws(
                         seq    += 1
                         pcm_buf = b""
 
-                # Caption text — prefer the model's output transcription (the native-audio
-                # model does not reliably emit plain text parts); fall back to text parts.
                 cap = _extract_output_transcription(response) or _extract_text(response)
                 if cap:
                     async with send_lock:
                         await websocket.send_json({"type": "sentence", "text": cap})
 
-                # User's spoken words (mic mode) — accumulate for draft-intent detection.
                 in_tx = _extract_input_transcription(response)
                 if in_tx:
                     user_transcript += " " + in_tx
 
                 if _is_turn_complete(response) or _is_interrupted(response):
-                    # Flush remaining PCM
                     if pcm_buf:
                         wav = _pcm_to_wav(pcm_buf)
                         dur = _wav_duration_ms(wav)
@@ -503,17 +488,15 @@ async def _live_to_ws(
                             "type": "status", "state": "idle", "label": "Listening…"
                         })
 
-                    # Hybrid draft generation: detect intent in the USER's words.
                     user_said = (turn_state.get("user_text", "") + " " + user_transcript).strip()
-                    turn_state["user_text"] = ""   # consume so it doesn't carry over
+                    turn_state["user_text"] = "" 
                     user_transcript = ""
                     if user_said:
                         await _maybe_generate_draft(websocket, send_lock, user_said, session_id)
 
                     in_turn = False
-                    break   # this turn's generator is done; outer loop awaits the next
+                    break   
 
-            # receive() yielded nothing → the server closed the live socket. Stop.
             if not got_any:
                 logger.info("Live receive() ended with no data — session %s closed", session_id)
                 break
@@ -573,10 +556,6 @@ class LiveVoiceService:
                         )
                     )
                 ),
-                # Input transcription: the user's spoken words (drives draft-intent
-                # detection in mic mode). Output transcription: the model's spoken
-                # words (drives the live-caption text reveal — the native-audio model
-                # does not reliably emit plain text parts otherwise).
                 input_audio_transcription=types.AudioTranscriptionConfig(),
                 output_audio_transcription=types.AudioTranscriptionConfig(),
             )
@@ -592,7 +571,7 @@ class LiveVoiceService:
         client     = genai.Client(api_key=settings.gemini_api_key)
         send_lock  = asyncio.Lock()
         stop       = asyncio.Event()
-        turn_state: dict = {"user_text": ""}   # shared: latest user utterance
+        turn_state: dict = {"user_text": ""}  
         stats: dict      = {"in_chunks": 0, "out_chunks": 0}
 
         logger.info("Opening Live session — model=%s session=%s", live_model, session_id)
@@ -600,7 +579,6 @@ class LiveVoiceService:
 
         try:
             async with client.aio.live.connect(model=live_model, config=live_config) as live_session:
-                # Handshake
                 async with send_lock:
                     await websocket.send_json({
                         "type": "status", "state": "idle", "label": "Live — speak now"
@@ -614,7 +592,6 @@ class LiveVoiceService:
                         "text": "Live voice active. Speak naturally — I'm listening.",
                     })
 
-                # Launch both tasks concurrently
                 task_send = asyncio.create_task(
                     _ws_to_live(websocket, live_session, send_lock, stop, types, turn_state, stats),
                     name="ws_to_live",
@@ -624,9 +601,6 @@ class LiveVoiceService:
                     name="live_to_ws",
                 )
 
-                # Wait for either task to finish, then cancel the other.
-                # Normal end: the browser closes the socket (user ends call) →
-                # _ws_to_live finishes → we cancel the (possibly idle) receive task.
                 done, pending = await asyncio.wait(
                     {task_send, task_recv},
                     return_when=asyncio.FIRST_COMPLETED,

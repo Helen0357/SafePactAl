@@ -1,7 +1,11 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.api.handlers.session_handler import handle_get_session, handle_set_active_clause
+from app.api.handlers.session_handler import (
+    handle_get_session,
+    handle_set_active_clause,
+    handle_set_selected_clauses,
+)
 from app.schemas.session_schema import Session
 
 router = APIRouter()
@@ -10,6 +14,11 @@ router = APIRouter()
 class SetActiveClauseRequest(BaseModel):
     session_id: str
     active_clause_id: str
+
+
+class SetSelectedClausesRequest(BaseModel):
+    session_id: str
+    selected_clause_ids: list[str]
 
 
 @router.post(
@@ -22,6 +31,19 @@ class SetActiveClauseRequest(BaseModel):
 )
 async def set_active_clause(request: SetActiveClauseRequest):
     return await handle_set_active_clause(request.session_id, request.active_clause_id)
+
+
+@router.post(
+    "/selected-clauses",
+    summary="Set the selected (multi-focus) risk clauses",
+    description=(
+        "Tell the session which risk clauses the user selected. The voice agent "
+        "uses these to answer 'explain these clauses' / 'compare these' / 'write a "
+        "message about these' about only the selected risks."
+    ),
+)
+async def set_selected_clauses(request: SetSelectedClausesRequest):
+    return await handle_set_selected_clauses(request.session_id, request.selected_clause_ids)
 
 
 @router.get(

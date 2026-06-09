@@ -1,5 +1,9 @@
 import axios from "axios";
-import type { AnalyzeResponse, GenerateMessageRequest, GenerateMessageResponse } from "./types";
+import type {
+  AnalyzeResponse,
+  GenerateMessageRequest,
+  GenerateMessageResponse,
+} from "./types";
 
 // API base URL. Accepts NEXT_PUBLIC_API_BASE_URL (preferred) or the legacy
 // NEXT_PUBLIC_API_URL, falling back to local dev.
@@ -13,6 +17,17 @@ const api = axios.create({
   timeout: 120_000,
 });
 
+api.interceptors.request.use((config) => {
+  // Respect an explicit per-request X-Language (e.g. Generate Message passes the
+  // next-intl locale directly). Only fall back to the <html lang> attribute when
+  // the caller didn't set one — that attribute can lag during soft navigation.
+  if (typeof document !== "undefined" && !config.headers["X-Language"]) {
+    const locale = document.documentElement.lang || "en";
+    config.headers["X-Language"] = locale;
+  }
+  return config;
+});
+
 export async function analyzeContract(
   file?: File,
   text?: string,
@@ -20,16 +35,25 @@ export async function analyzeContract(
   const form = new FormData();
   if (file) form.append("file", file);
   if (text) form.append("text", text);
-  const { data } = await api.post<AnalyzeResponse>("/api/contracts/analyze", form);
+  const { data } = await api.post<AnalyzeResponse>(
+    "/api/contracts/analyze",
+    form,
+  );
   return data;
 }
 
 export async function generateMessage(
   req: GenerateMessageRequest,
+  language?: string,
 ): Promise<GenerateMessageResponse> {
+  // The draft language follows the website language. Send it both in the request
+  // BODY (primary, reliable) and the X-Language header (backup) so it never depends
+  // on the (possibly stale) <html lang> attribute or a stripped header.
+  const body = language ? { ...req, language } : req;
   const { data } = await api.post<GenerateMessageResponse>(
     "/api/actions/generate-message",
-    req,
+    body,
+    language ? { headers: { "X-Language": language } } : undefined,
   );
   return data;
 }
@@ -42,6 +66,49 @@ export async function setActiveClause(
     session_id: sessionId,
     active_clause_id: clauseId,
   });
+}
+
+export async function setSelectedClauses(
+  sessionId: string,
+  clauseIds: string[],
+): Promise<void> {
+  await api.post("/api/session/selected-clauses", {
+    session_id: sessionId,
+    selected_clause_ids: clauseIds,
+  });
+}
+
+export const REPORT_PDF_FILENAME = "SafePact_AI_Risk_Report.pdf";
+
+/** Trigger a direct browser download for an in-memory blob (no server storage). */
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoke after a tick so the download has started.
+  setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Fetch the risk-report PDF for a session and download it directly.
+ * Throws an axios error (with `.response.status`) on 404/409 so the caller can
+ * show the right message. Nothing is stored anywhere.
+ */
+export async function downloadReportPdf(
+  sessionId: string,
+  language = "en",
+): Promise<void> {
+  const resp = await api.post(
+    "/api/reports/download-pdf",
+    { session_id: sessionId, language },
+    { responseType: "blob" },
+  );
+  const blob = new Blob([resp.data], { type: "application/pdf" });
+  triggerBlobDownload(blob, REPORT_PDF_FILENAME);
 }
 
 export { api };

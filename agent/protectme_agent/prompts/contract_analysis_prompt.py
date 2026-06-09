@@ -24,7 +24,6 @@ You are NOT a lawyer. Do NOT use legal jargon. Do NOT provide legal opinions.
 Frame everything as "you may want to ask" or "this could mean", never as legal advice.
 """
 
-# Schema hint embedded in the user prompt to anchor Gemini's output format
 SCHEMA_HINT = """\
 {
   "contract_type": "string — e.g. Rental Agreement, Employment Contract, Service Agreement",
@@ -57,7 +56,7 @@ ANALYSIS_PROMPT_TEMPLATE = """\
 Analyze the following contract and return a JSON risk report using EXACTLY this schema:
 
 {schema}
-
+{language_instruction}
 CONTRACT TEXT:
 ---
 {contract_text}
@@ -66,15 +65,29 @@ CONTRACT TEXT:
 Return ONLY the JSON object. No other text before or after it."""
 
 
-def build_analysis_prompt(contract_text: str) -> str:
-    """Assemble the final user prompt with schema and contract text."""
+_ARABIC_INSTRUCTION = """
+LANGUAGE INSTRUCTION (IMPORTANT):
+Write ALL user-facing text fields in clear Modern Standard Arabic (العربية):
+contract_type, summary, final_recommendation, and for EACH risk: title, category,
+simple_explanation, why_it_matters, question_to_ask, suggested_action.
+Keep the JSON keys themselves in English.
+Keep clause_text in the ORIGINAL contract language (verbatim quote — do not translate it).
+The fields "overall_risk" and "severity" MUST remain EXACTLY one of the English
+values (High | Medium | Low | Minimal) — do NOT translate those two fields.
+"""
+
+
+def build_analysis_prompt(contract_text: str, language: str = "en") -> str:
+    """Assemble the final user prompt with schema and contract text.
+    language='ar' makes the user-facing fields Arabic (enums stay English)."""
+    lang_instruction = _ARABIC_INSTRUCTION if str(language).lower().startswith("ar") else ""
     return ANALYSIS_PROMPT_TEMPLATE.format(
         schema=SCHEMA_HINT,
+        language_instruction=lang_instruction,
         contract_text=contract_text,
     )
 
 
-# Retry prompt used when Gemini's first response cannot be parsed as JSON
 JSON_REPAIR_PROMPT_TEMPLATE = """\
 The text below was supposed to be a JSON object but it is not valid JSON.
 Please fix it so it is valid JSON and return ONLY the corrected JSON object.

@@ -5,14 +5,14 @@ Phase 3: full implementation.
 from typing import Optional
 
 INTENT_CLASSES = [
-    "ask_question",       # General question about the contract
-    "explain_clause",     # "What does this mean?"
-    "generate_message",   # "Write me an email / WhatsApp message"
-    "summarize_risks",    # "Give me a quick overview"
-    "ask_recommendation", # "What should I do?"
-    "modify_message",     # "Make it shorter / more formal"
-    "generate_questions", # "What should I ask them?"
-    "unclear",            # Ambiguous — ask for clarification
+    "ask_question",      
+    "explain_clause",     
+    "generate_message",  
+    "summarize_risks",    
+    "ask_recommendation",
+    "modify_message",     
+    "generate_questions",
+    "unclear",          
 ]
 
 INTENT_ROUTER_PROMPT = """\

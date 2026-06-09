@@ -25,6 +25,7 @@ class GenerateMessageTool:
         format: str,
         gemini_client=None,
         extra_instruction: Optional[str] = None,
+        language: str = "en",
     ) -> str:
         if not clause_texts:
             raise ValueError("No clause texts provided.")
@@ -43,6 +44,7 @@ class GenerateMessageTool:
             tone=tone,
             format=format,
             extra_instruction=extra_instruction,
+            language=language,
         )
 
         logger.debug(

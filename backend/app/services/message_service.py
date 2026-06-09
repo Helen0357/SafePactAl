@@ -8,7 +8,6 @@ import logging
 import sys
 from pathlib import Path
 
-# message_service.py → services/ → app/ → backend/ → project root → agent/
 _AGENT_ROOT = Path(__file__).resolve().parent.parent.parent.parent / "agent"
 if str(_AGENT_ROOT) not in sys.path:
     sys.path.insert(0, str(_AGENT_ROOT))
@@ -27,6 +26,107 @@ from app.services.session_service import session_service
 logger = logging.getLogger(__name__)
 
 
+def _has_arabic(text: str) -> bool:
+    """True if the text contains any Arabic character (U+0600–U+06FF)."""
+    return any("؀" <= ch <= "ۿ" for ch in (text or ""))
+
+
+def _clamp_lang(value) -> str:
+    """Clamp any value to the allowed draft languages: 'ar' or 'en'."""
+    return "ar" if str(value or "").strip().lower().startswith("ar") else "en"
+
+
+def _resolve_language(body_lang, header_lang, session_lang):
+    """Resolve the draft language with priority:
+    request body 'language' > X-Language header > session language > 'en'.
+    Returns (lang, source) so the source can be logged."""
+    for value, source in (
+        (body_lang, "body"),
+        (header_lang, "header"),
+        (session_lang, "session"),
+    ):
+        if value is not None and str(value).strip():
+            return _clamp_lang(value), source
+    return "en", "default"
+
+
+_ENGLISH_TEMPLATE_MARKERS = (
+    "subject:", "dear ", "best regards", "kind regards", "warm regards",
+    "i hope this email finds you well", "to whom it may concern",
+    "sincerely,", "clarification request", "yours faithfully",
+)
+
+
+def _is_acceptable_arabic(text: str) -> bool:
+    """An Arabic draft must (1) avoid English template scaffolding (Subject:, Dear,
+    Best regards, …) and (2) be predominantly Arabic — Arabic letters must at least
+    match the Latin letters, so an English-heavy draft with a few Arabic words is
+    rejected and routed to the deterministic Arabic fallback."""
+    if not text:
+        return False
+    low = text.lower()
+    if any(marker in low for marker in _ENGLISH_TEMPLATE_MARKERS):
+        return False
+    arabic = sum(1 for ch in text if "؀" <= ch <= "ۿ")
+    latin = sum(1 for ch in text if "a" <= ch <= "z" or "A" <= ch <= "Z")
+    return arabic > 0 and arabic >= latin
+
+
+
+_AR_SUBJECT = {
+    "clarification": "طلب توضيح بخصوص بنود العقد",
+    "negotiation": "طلب التفاوض بشأن بعض بنود العقد",
+    "rejection": "تحفّظات على بعض بنود العقد",
+    "amendment_request": "طلب تعديل بعض بنود العقد",
+}
+_AR_OPENING = {
+    "clarification": "أكتب إليكم لطلب توضيح بخصوص بعض البنود في العقد:",
+    "negotiation": "أكتب إليكم لمناقشة بعض البنود في العقد والتفاوض بشأنها:",
+    "rejection": "أكتب إليكم لإبداء بعض التحفّظات على بنود في العقد:",
+    "amendment_request": "أكتب إليكم لطلب تعديل بعض البنود في العقد:",
+}
+
+
+def _arabic_fallback_draft(selected, message_type, tone, format, extra_instruction):
+    """Build a deterministic Arabic draft from the selected risks (no model call)."""
+    subject = _AR_SUBJECT.get(message_type, _AR_SUBJECT["clarification"])
+    opening = _AR_OPENING.get(message_type, _AR_OPENING["clarification"])
+    bullets = [
+        f"- {r.get('title', '').strip()}: {r.get('simple_explanation', '').strip()}".rstrip(": ")
+        for r in selected
+    ]
+    note = f"ملاحظة إضافية: {extra_instruction.strip()}" if extra_instruction else ""
+    closing_request = (
+        "أتوقّع توضيح هذه النقاط أو تعديلها قبل المتابعة."
+        if str(tone).lower() == "firm"
+        else "أرجو منكم التكرّم بتوضيح هذه النقاط أو إعادة النظر فيها قبل المتابعة."
+    )
+
+    if str(format).lower() == "whatsapp":
+        titles = "، ".join(r.get("title", "").strip() for r in selected if r.get("title"))
+        parts = [f"مرحباً، {opening}"]
+        if titles:
+            parts.append(titles + ".")
+        if note:
+            parts.append(note + ".")
+        parts.append("هل يمكن توضيح ذلك أو إعادة النظر فيه؟ شكراً لك.")
+        return " ".join(parts)
+
+    lines = [
+        f"الموضوع: {subject}",
+        "",
+        "مرحباً [اسم المستلم]،",
+        "",
+        opening,
+        "",
+        *bullets,
+    ]
+    if note:
+        lines += ["", note]
+    lines += ["", closing_request, "", "مع خالص التحية،", "[اسمك]"]
+    return "\n".join(lines)
+
+
 def _build_gemini_client():
     """Create a GeminiClient using current settings."""
     from protectme_agent.gemini_client import GeminiClient
@@ -43,7 +143,7 @@ class MessageService:
     """Generates professional messages from selected contract risks."""
 
     async def generate_message(
-        self, request: GenerateMessageRequest
+        self, request: GenerateMessageRequest, header_language: str | None = None
     ) -> GenerateMessageResponse:
         if not settings.is_gemini_configured:
             raise GeminiNotConfiguredError()
@@ -52,6 +152,14 @@ class MessageService:
 
         if not session.risk_report:
             raise NoRiskReportError()
+
+
+        lang, lang_source = _resolve_language(
+            getattr(request, "language", None),
+            header_language,
+            getattr(session, "language", None),
+        )
+        logger.info("[GenerateMessage] resolved_language=%s source=%s", lang, lang_source)
 
         risks = session.risk_report.get("risks", [])
         risk_map = {r["id"]: r for r in risks}
@@ -71,24 +179,57 @@ class MessageService:
         tool = GenerateMessageTool()
         client = _build_gemini_client()
 
+        extra_instruction = request.extra_instruction or None
+
         logger.info(
-            "[MessageService] Generating %s/%s/%s for %d clause(s).",
+            "[MessageService] Generating %s/%s/%s (lang=%s) for %d clause(s).",
             request.message_type.value,
             request.tone.value,
             request.format.value,
+            lang,
             len(selected),
         )
 
-        try:
-            draft = await tool.execute(
+        async def _generate(extra):
+            return await tool.execute(
                 clause_texts=clause_texts,
                 risk_titles=risk_titles,
                 message_type=request.message_type.value,
                 tone=request.tone.value,
                 format=request.format.value,
                 gemini_client=client,
-                extra_instruction=request.extra_instruction,
+                extra_instruction=extra,
+                language=lang,
             )
+
+        try:
+            draft = await _generate(extra_instruction)
+        
+            if lang == "ar" and not _is_acceptable_arabic(draft):
+                logger.warning(
+                    "[MessageService] Arabic requested but draft looked English; retrying once."
+                )
+                retry_extra = " ".join(
+                    p for p in (
+                        extra_instruction,
+                        "CRITICAL: Your previous attempt was written in English. Rewrite the "
+                        "ENTIRE message in Arabic (العربية) only — the subject line, greeting, "
+                        'body, and closing. Output no English at all; use "الموضوع:" for the '
+                        'subject, never "Subject:".',
+                    ) if p
+                )
+                draft = await _generate(retry_extra)
+                if not _is_acceptable_arabic(draft):
+                    logger.warning(
+                        "[MessageService] Retry still not Arabic; using deterministic Arabic fallback."
+                    )
+                    draft = _arabic_fallback_draft(
+                        selected,
+                        request.message_type.value,
+                        request.tone.value,
+                        request.format.value,
+                        extra_instruction,
+                    )
         except Exception as exc:
             logger.error("[MessageService] Generation failed: %s", exc)
             raise MessageGenerationError(str(exc)) from exc

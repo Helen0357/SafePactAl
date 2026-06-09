@@ -25,7 +25,6 @@ import time
 from pathlib import Path
 from typing import Optional
 
-# voice_service.py -> services/ -> app/ -> backend/ -> project root -> agent/
 _AGENT_ROOT = Path(__file__).resolve().parent.parent.parent.parent / "agent"
 if str(_AGENT_ROOT) not in sys.path:
     sys.path.insert(0, str(_AGENT_ROOT))
@@ -38,15 +37,20 @@ from app.repositories.session_repository import session_repository
 from app.schemas.session_schema import GeneratedMessage
 from app.services.session_service import session_service
 
-from protectme_agent.conversation_agent import ConversationAgent  # noqa: E402
-from protectme_agent.fast_path import match_fast_path, wants_modify  # noqa: E402
-from protectme_agent.gemini_client import GeminiClient  # noqa: E402
-from protectme_agent.safety.legal_disclaimer import (  # noqa: E402
+from protectme_agent.conversation_agent import ConversationAgent  
+from protectme_agent.fast_path import (  
+    match_fast_path,
+    resolve_response_language,
+    wants_modify,
+    wants_pdf,
+)
+from protectme_agent.gemini_client import GeminiClient  
+from protectme_agent.safety.legal_disclaimer import (  
     DISCLAIMER_HIGH_RISK,
     DISCLAIMER_VOICE_INTRO,
     should_add_high_risk_disclaimer,
 )
-from protectme_agent.streaming.tts_service import (  # noqa: E402
+from protectme_agent.streaming.tts_service import (  
     synthesize_speech_fast,
     wav_duration_ms,
 )
@@ -54,14 +58,13 @@ from protectme_agent.streaming.tts_service import (  # noqa: E402
 logger = logging.getLogger(__name__)
 
 # ── Sentence chunking ─────────────────────────────────────────────────────────
-# Split long sentences at natural voice break points so TTS tasks are shorter,
-# start sooner, and audio arrives with lower perceived latency.
 
-_TTS_MAX_CHARS = 110   # target max chars per TTS chunk
 
-# Matches natural break points where a sentence can be split without losing meaning:
-#   comma/semicolon followed by space, em/en dash with spaces,
-#   or conjunctions (but, and, or, so, because, however, therefore, although, while)
+_TTS_MAX_CHARS = 180      
+_TTS_MIN_CHARS = 25       
+_TTS_COALESCE_CHARS = 120  
+
+
 _BREAK_RE = re.compile(
     r",\s+|;\s+|\s+[—–]\s+"
     r"|\s+(?:but|however|and|or|so|because|therefore|although|while)\s+",
@@ -69,7 +72,7 @@ _BREAK_RE = re.compile(
 )
 
 
-def _chunk_for_tts(text: str, max_chars: int = _TTS_MAX_CHARS) -> list[str]:
+def _split_for_tts(text: str, max_chars: int = _TTS_MAX_CHARS) -> list[str]:
     """
     Recursively split a sentence into short TTS-friendly chunks.
     Splits at natural break points (comma, conjunction, dash).
@@ -82,12 +85,11 @@ def _chunk_for_tts(text: str, max_chars: int = _TTS_MAX_CHARS) -> list[str]:
     if len(text) <= max_chars:
         return [text]
 
-    # Find the LAST good break point within max_chars
     best: Optional[re.Match] = None
     for m in _BREAK_RE.finditer(text):
         if m.start() > max_chars:
             break
-        if m.start() > 12:  # avoid an absurdly tiny first chunk
+        if m.start() > 12: 
             best = m
 
     if best:
@@ -95,51 +97,67 @@ def _chunk_for_tts(text: str, max_chars: int = _TTS_MAX_CHARS) -> list[str]:
         right = text[best.end() :].strip()
         result: list[str] = []
         if len(left) >= 8:
-            result.extend(_chunk_for_tts(left, max_chars))
+            result.extend(_split_for_tts(left, max_chars))
         if len(right) >= 8:
-            result.extend(_chunk_for_tts(right, max_chars))
+            result.extend(_split_for_tts(right, max_chars))
         if result:
             return result
 
-    # No regex break — split at the last word boundary within max_chars
     cut = text.rfind(" ", 0, max_chars)
     if cut > 12:
         left = text[:cut].strip()
         right = text[cut:].strip()
         result = []
         if len(left) >= 8:
-            result.extend(_chunk_for_tts(left, max_chars))
+            result.extend(_split_for_tts(left, max_chars))
         if len(right) >= 8:
-            result.extend(_chunk_for_tts(right, max_chars))
+            result.extend(_split_for_tts(right, max_chars))
         if result:
             return result
 
-    return [text]  # cannot split reasonably — keep as-is
+    return [text]
+
+
+def _merge_small(chunks: list[str], min_chars: int = _TTS_MIN_CHARS) -> list[str]:
+    """Merge tiny fragments into a neighbor so we don't synthesize/play very short
+    chunks (those cause more audible clicks/transitions). Keeps order."""
+    if not chunks:
+        return chunks
+    merged: list[str] = [chunks[0]]
+    for c in chunks[1:]:
+        if len(merged[-1]) < min_chars:
+            merged[-1] = f"{merged[-1]} {c}".strip()
+        else:
+            merged.append(c)
+    if len(merged) >= 2 and len(merged[-1]) < min_chars:
+        tail = merged.pop()
+        merged[-1] = f"{merged[-1]} {tail}".strip()
+    return merged
+
+
+def _chunk_for_tts(text: str, max_chars: int = _TTS_MAX_CHARS) -> list[str]:
+    """Split a sentence into TTS-friendly chunks, then merge tiny fragments so
+    transitions between chunks are fewer and smoother."""
+    return _merge_small(_split_for_tts(text, max_chars))
 
 
 # ── Preamble ──────────────────────────────────────────────────────────────────
-# A short sentence played immediately while Gemini is generating the full answer.
-# Conservative: only used for high-confidence, clearly safe intents.
-# Must never be misleading.
+
 
 _PREAMBLE_PATTERNS: list[tuple[re.Pattern, str]] = [
-    # generate_message — most unambiguous, checked first
     (
         re.compile(r"\b(write|draft|email|message|whatsapp|letter|send)\b", re.I),
         "I can draft that message for you.",
     ),
-    # summarize_risks — check before generic "explain" to avoid false match on
-    # "What is the biggest risk?" hitting an explain-clause preamble
+   
     (
         re.compile(r"\b(biggest risk|main risk|top risk|overall risk|overview|summary)\b", re.I),
         "Let me review the main risks.",
     ),
-    # explain_clause — only match the verb "explain" or "describe", not "what is"
     (
         re.compile(r"\b(explain|describe)\b", re.I),
         "Let me explain this clause.",
     ),
-    # generate_questions
     (
         re.compile(r"\b(questions|what (should|to) ask|ask them)\b", re.I),
         "Here are the key questions to ask.",
@@ -155,20 +173,31 @@ def _select_preamble(user_text: str) -> str:
     return ""
 
 
-# ── Arabic voice support ────────────────────────────────────────────────────
-# If a chunk contains Arabic script, synthesize it with a Google Cloud Arabic
-# voice instead of the English Journey voice. Falls back automatically (text
-# only) if the Arabic voice is unavailable.
+# ── Arabic voice support (Phase 8H) ──────────────────────────────────────────
+
 _ARABIC_CHARS = re.compile(r"[؀-ۿ]")
-_ARABIC_VOICE = "ar-XA-Wavenet-B"
-_ARABIC_LANG  = "ar-XA"
+_arabic_fallback_warned = False
 
 
 def _voice_for(text: str, default_voice: str) -> tuple[str, str]:
-    """Return (voice_name, language_code) appropriate for the chunk's language."""
+    """Return (voice_name, language_code) appropriate for the chunk's language.
+
+    English → the configured Journey voice. Arabic → the configured Arabic voice,
+    or (if none is set) an empty name so Google selects a default ar-XA voice
+    (verified to work) — logged once so it's visible the voice wasn't pinned."""
+    global _arabic_fallback_warned
     if _ARABIC_CHARS.search(text):
-        return _ARABIC_VOICE, _ARABIC_LANG
-    return default_voice, "en-US"
+        lang = settings.google_cloud_tts_arabic_language or "ar-XA"
+        voice = (settings.google_cloud_tts_arabic_voice or "").strip()
+        if voice:
+            return voice, lang
+        if not _arabic_fallback_warned:
+            logger.warning(
+                "[Voice] Arabic requested — Arabic TTS voice not configured, using fallback voice"
+            )
+            _arabic_fallback_warned = True
+        return "", lang  
+    return default_voice, settings.google_cloud_tts_language or "en-US"
 
 
 # ── TTS task ──────────────────────────────────────────────────────────────────
@@ -185,11 +214,19 @@ def _build_gemini_client() -> GeminiClient:
 
 
 def _build_greeting(session) -> str:
+    lang = "ar" if str(getattr(session, "language", "en") or "").lower().startswith("ar") else "en"
     if not session.risk_report:
+        if lang == "ar":
+            return "مرحباً، كيف يمكنني مساعدتك في هذا العقد؟"
         return DISCLAIMER_VOICE_INTRO
     overall = session.risk_report.get("overall_risk", "")
     risk_count = len(session.risk_report.get("risks", []))
     contract_type = session.risk_report.get("contract_type", "your contract")
+    if lang == "ar":
+        return (
+            f"مرحباً، لقد حلّلت {contract_type} ووجدت {risk_count} من المخاطر. "
+            "كيف يمكنني مساعدتك؟"
+        )
     greeting = (
         f"I can see you've analyzed {contract_type} with {risk_count} risk(s) "
         f"identified and an overall risk of {overall}. "
@@ -228,7 +265,6 @@ async def _tts_and_send(
     """
     from protectme_agent.streaming.tts_service import _GCP_DEFAULT_VOICE  # noqa: E402
 
-    # Pick an Arabic voice automatically when the chunk is Arabic.
     resolved_voice, language_code = _voice_for(text, voice_name or _GCP_DEFAULT_VOICE)
 
     t_tts_start = time.monotonic()
@@ -317,7 +353,7 @@ class VoiceService:
     """
 
     async def handle_voice_session(
-        self, session_id: str, websocket: WebSocket
+        self, session_id: str, websocket: WebSocket, language: str = "en"
     ) -> None:
         if not settings.is_gemini_configured:
             raise GeminiNotConfiguredError()
@@ -325,18 +361,18 @@ class VoiceService:
         if not session_repository.exists(session_id):
             raise SessionNotFoundError(session_id)
 
+  
+        _lang = "ar" if str(language or "").strip().lower().startswith("ar") else "en"
+        session_repository.update(session_id, language=_lang)
         session = session_repository.get(session_id)
         client = _build_gemini_client()
         agent = ConversationAgent(client)
 
-        # Shared lock — all concurrent TTS tasks serialise WS writes through this
         send_lock = asyncio.Lock()
 
-        # turn_id: greeting=0, first user turn=1, ...
         _next_turn_id = 1
 
-        # TTS credentials (read once; reused for every task)
-        _google_key  = settings.google_cloud_tts_api_key  # legacy REST key (unused)
+        _google_key  = settings.google_cloud_tts_api_key  
         _gemini_key  = settings.gemini_api_key
         _voice_name  = settings.google_cloud_tts_voice
         _tts_timeout = settings.tts_chunk_timeout_seconds
@@ -348,8 +384,7 @@ class VoiceService:
             )
         greeting = _build_greeting(session)
         async with send_lock:
-            # Tagged so the frontend shows/speaks the greeting only once per panel
-            # session (silent reconnects re-send it; the client de-dupes on this flag).
+          
             await websocket.send_json(
                 {"type": "sentence", "text": greeting, "greeting": True}
             )
@@ -405,7 +440,6 @@ class VoiceService:
             if not user_text:
                 continue
 
-            # Assign turn ID before any async work
             current_turn_id = _next_turn_id
             _next_turn_id += 1
             t_turn_start = time.monotonic()
@@ -418,7 +452,6 @@ class VoiceService:
                     }
                 )
 
-            # Refresh session (REST endpoints may have mutated active clause)
             session = session_repository.get(session_id)
 
             session_service.add_conversation_turn(
@@ -430,25 +463,12 @@ class VoiceService:
             tts_tasks: list[asyncio.Task] = []
             seq = 0
             t_first_sentence: Optional[float] = None
+            pending_tts = ""  
 
-            # ── Preamble ───────────────────────────────────────────────────────
-            # Short pre-answer played immediately while the answer is produced.
-            # Fast-path questions get an intent-specific preamble (or none, since
-            # their answer is instant); genuinely complex questions that fall
-            # through to Gemini get a neutral "Let me check that." so the user
-            # hears something while the model thinks.
-            preamble = _select_preamble(user_text)
-            # Default "Let me check that." only for genuine Gemini-fallback questions —
-            # not for fast-path answers, and not for "make it shorter" style draft edits
-            # (the modify handler speaks its own confirmation).
-            if not preamble and not match_fast_path(user_text) and not wants_modify(user_text):
-                preamble = "Let me check that."
-            if preamble:
-                async with send_lock:
-                    await websocket.send_json({"type": "sentence", "text": preamble})
-                assistant_parts.append(preamble)
-                chunks = _chunk_for_tts(preamble)
-                for chunk in chunks:
+            def schedule_tts(text: str) -> None:
+                """Chunk `text` and fire a TTS task per chunk (advances seq)."""
+                nonlocal seq
+                for chunk in _chunk_for_tts(text):
                     task = asyncio.create_task(
                         _tts_and_send(
                             websocket,
@@ -466,6 +486,23 @@ class VoiceService:
                     )
                     tts_tasks.append(task)
                     seq += 1
+
+            # ── Preamble ───────────────────────────────────────────────────────
+            if wants_pdf(user_text):
+                preamble = ""
+            elif resolve_response_language(user_text, getattr(session, "language", "en")) == "ar":
+                preamble = "لحظة من فضلك." 
+            else:
+                preamble = _select_preamble(user_text)
+             
+                if (not preamble and not match_fast_path(user_text)
+                        and not wants_modify(user_text) and not wants_pdf(user_text)):
+                    preamble = "Let me check that."
+            if preamble:
+                async with send_lock:
+                    await websocket.send_json({"type": "sentence", "text": preamble})
+                assistant_parts.append(preamble)
+                schedule_tts(preamble) 
                 t_first_sentence = time.monotonic() - t_turn_start
                 async with send_lock:
                     await websocket.send_json(
@@ -494,7 +531,6 @@ class VoiceService:
                         sentence_text = event["text"]
                         assistant_parts.append(sentence_text)
 
-                        # Track first sentence timing
                         if t_first_sentence is None:
                             t_first_sentence = time.monotonic() - t_turn_start
                             async with send_lock:
@@ -508,26 +544,14 @@ class VoiceService:
                                     }
                                 )
 
-                        # Split long sentences into shorter TTS chunks
-                        chunks = _chunk_for_tts(sentence_text)
-                        for chunk in chunks:
-                            task = asyncio.create_task(
-                                _tts_and_send(
-                                    websocket,
-                                    send_lock,
-                                    chunk,
-                                    seq=seq,
-                                    turn_id=current_turn_id,
-                                    t_turn_start=t_turn_start,
-                                    emit_error_event=True,
-                                    google_cloud_api_key=_google_key,
-                                    gemini_api_key=_gemini_key,
-                                    voice_name=_voice_name,
-                                    timeout_seconds=_tts_timeout,
-                                )
-                            )
-                            tts_tasks.append(task)
-                            seq += 1
+                        pending_tts = (
+                            f"{pending_tts} {sentence_text}".strip()
+                            if pending_tts
+                            else sentence_text
+                        )
+                        if len(pending_tts) >= _TTS_COALESCE_CHARS:
+                            schedule_tts(pending_tts)
+                            pending_tts = ""
 
                     if event.get("type") == "draft_ready":
                         generated = GeneratedMessage(
@@ -542,6 +566,10 @@ class VoiceService:
                             draft=event.get("draft", ""),
                         )
                         session_service.add_generated_message(session_id, generated)
+
+                if pending_tts.strip():
+                    schedule_tts(pending_tts)
+                    pending_tts = ""
 
             except WebSocketDisconnect:
                 logger.info("WS disconnected mid-turn — session: %s", session_id)
@@ -566,7 +594,6 @@ class VoiceService:
                 except Exception:
                     return
 
-            # Wait for all TTS tasks, then signal frontend
             if tts_tasks:
                 await asyncio.gather(*tts_tasks, return_exceptions=True)
 

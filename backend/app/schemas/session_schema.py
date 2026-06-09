@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class ConversationMessage(BaseModel):
-    role: str  # "user" | "assistant"
+    role: str 
     content: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
@@ -25,6 +25,7 @@ class Session(BaseModel):
     risk_report: Optional[Dict[str, Any]] = None
     active_clause_id: Optional[str] = None
     selected_clause_ids: List[str] = Field(default_factory=list)
+    language: str = "en"  
     conversation_history: List[ConversationMessage] = Field(default_factory=list)
     generated_messages: List[GeneratedMessage] = Field(default_factory=list)
     debug_logs: List[str] = Field(default_factory=list)

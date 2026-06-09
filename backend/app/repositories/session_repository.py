@@ -75,5 +75,4 @@ class SessionRepository(BaseRepository[Session]):
             return len(self._store)
 
 
-# Singleton — imported by services
 session_repository = SessionRepository()

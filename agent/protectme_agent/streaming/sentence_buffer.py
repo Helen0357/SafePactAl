@@ -14,7 +14,6 @@ Phase 5: full implementation with edge-case handling
 import re
 from typing import List
 
-# Positive look-behind: emit after sentence-ending punctuation followed by whitespace
 _BOUNDARY = re.compile(r"(?<=[.!?،؟])\s+")
 
 
@@ -45,6 +44,5 @@ class SentenceBuffer:
         parts = _BOUNDARY.split(self._buffer)
         if len(parts) <= 1:
             return []
-        # Last part is incomplete — keep in buffer
         complete, self._buffer = parts[:-1], parts[-1]
         return [s.strip() for s in complete if s.strip()]

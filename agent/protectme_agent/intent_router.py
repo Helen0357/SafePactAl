@@ -57,11 +57,9 @@ class IntentRouter:
                 clarification_question=_FALLBACK_CLARIFICATION,
             )
 
-        # Enforce confidence threshold
         if result.confidence < 0.6 and result.intent != Intent.UNCLEAR:
             result = result.model_copy(update={"intent": Intent.UNCLEAR})
 
-        # Attach clarification question whenever the result is unclear
         if result.needs_clarification and not result.clarification_question:
             result = result.model_copy(
                 update={"clarification_question": _FALLBACK_CLARIFICATION}

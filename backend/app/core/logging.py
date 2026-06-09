@@ -5,12 +5,8 @@ import sys
 def setup_logging(log_level: str = "INFO") -> None:
     level = getattr(logging, log_level.upper(), logging.INFO)
 
-    # On Windows the console is cp1252 by default; log lines / tracebacks that
-    # contain Unicode (e.g. the "→" in our docstrings) otherwise crash the log
-    # handler with UnicodeEncodeError and can mask the real error. Force UTF-8
-    # with a safe fallback so logging never raises.
     try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")  # type: ignore[attr-defined]
+        sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")  
     except Exception:
         pass
 
@@ -22,7 +18,6 @@ def setup_logging(log_level: str = "INFO") -> None:
         force=True,
     )
 
-    # Reduce noise from third-party libraries
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)

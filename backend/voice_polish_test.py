@@ -31,7 +31,6 @@ RESIDENTIAL TENANCY AGREEMENT
 
 
 def count_sentences(parts):
-    # parts is the list of 'sentence' events captured; count non-empty
     return len([p for p in parts if p.strip()])
 
 
@@ -89,7 +88,6 @@ async def run():
     target = next((x for x in risks if "deposit" in x["title"].lower()), risks[0])
     print(f"session={sid[:8]}  {len(risks)} risks  | target clause {target['id']} = {target['title']}")
 
-    # focus the deposit clause (as the UI does on 'Ask Agent')
     async with httpx.AsyncClient(timeout=30) as http:
         await http.post(f"{BASE_URL}/api/session/active-clause",
                         json={"session_id": sid, "active_clause_id": target["id"]})
@@ -97,7 +95,6 @@ async def run():
     ws_url = f"{WS_BASE}/ws/voice/{sid}"
     R = {}
     async with websockets.connect(ws_url, max_size=20 * 1024 * 1024) as ws:
-        # drain greeting
         tg = time.monotonic()
         while time.monotonic() - tg < 12:
             try:

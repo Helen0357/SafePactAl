@@ -1,5 +1,6 @@
 "use client";
 import { LucideIcon } from "@/components/ui/Icon";
+import { useTranslations } from "next-intl";
 
 interface SearchInputProps {
   value: string;
@@ -7,14 +8,17 @@ interface SearchInputProps {
 }
 
 export function SearchInput({ value, onChange }: SearchInputProps) {
+  const t = useTranslations("Dashboard.filters");
+
   return (
-    <div className="search">
+    <div className="search !bg-white border rounded-sm">
       <LucideIcon name="search" size={17} />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Search risks…"
+        placeholder={t("search_placeholder")}
         aria-label="Search risks"
+        className=""
       />
       {value && (
         <button

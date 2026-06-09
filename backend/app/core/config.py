@@ -1,8 +1,7 @@
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Resolve .env relative to this file so the app works regardless
-# of which directory uvicorn is launched from.
+
 _ENV_FILE = Path(__file__).parent.parent.parent / ".env"
 
 
@@ -18,24 +17,22 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_analysis_model: str = ""
     gemini_conversation_model: str = ""
-    # Phase 8D: confirmed to connect via AI Studio key (bidiGenerateContent v1beta)
     gemini_live_model: str = "gemini-2.5-flash-native-audio-latest"
-    # Phase 8F: fastest model for the SHORT voice fallback answers (not analysis).
-    # Flash-Lite preferred; falls back to the conversation model if unavailable.
+
     voice_fallback_model: str = "gemini-2.5-flash-lite"
 
     # ── Google Cloud TTS — service account (Phase 8C) ────────
-    # Path to service account JSON. Relative paths are resolved
-    # from backend/ directory at startup. Falls back to Gemini TTS if empty.
+
     google_application_credentials: str = ""
-    google_cloud_tts_voice: str = "en-US-Journey-D"    # Journey warm male
+    google_cloud_tts_voice: str = "en-US-Journey-D"   
     google_cloud_tts_language: str = "en-US"
-    tts_provider: str = "google_cloud"                  # google_cloud | gemini
-    # Per-chunk TTS timeout — if one chunk's synthesis exceeds this, we emit a
-    # tts_error (text fallback) for that chunk instead of blocking the whole turn.
+    tts_provider: str = "google_cloud"   
+  
+    google_cloud_tts_arabic_voice: str = ""
+    google_cloud_tts_arabic_language: str = "ar-XA"
+
     tts_chunk_timeout_seconds: float = 8.0
 
-    # Legacy — REST API key approach (unused; kept for compat)
     google_cloud_tts_api_key: str = ""
 
     # ── Application ───────────────────────────────────────
@@ -46,8 +43,7 @@ class Settings(BaseSettings):
 
     # ── CORS ──────────────────────────────────────────────
     frontend_url: str = "http://localhost:3000"
-    # Comma-separated list of allowed origins. Takes precedence over frontend_url
-    # when set (e.g. BACKEND_CORS_ORIGINS=http://localhost:3000,http://localhost:3001).
+
     backend_cors_origins: str = ""
 
     # ── Session ───────────────────────────────────────────

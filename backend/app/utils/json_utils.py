@@ -12,13 +12,11 @@ def extract_json_from_text(text: str) -> Optional[dict]:
     markdown code fences (```json ... ```).
     Returns None if no valid JSON is found.
     """
-    # 1. Direct parse
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    # 2. Strip markdown fences
     for pattern in (r"```(?:json)?\s*([\s\S]+?)\s*```", r"`([\s\S]+?)`"):
         match = re.search(pattern, text)
         if match:
@@ -27,7 +25,6 @@ def extract_json_from_text(text: str) -> Optional[dict]:
             except json.JSONDecodeError:
                 continue
 
-    # 3. Find the outermost { … } block
     start, end = text.find("{"), text.rfind("}")
     if start != -1 and end > start:
         try:

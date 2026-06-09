@@ -23,7 +23,7 @@ class Orchestrator:
     def __init__(self, gemini_client=None):
         self._client = gemini_client
         self._analysis_agent = None
-        self._conversation_agent = None  # Phase 4
+        self._conversation_agent = None
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
@@ -35,14 +35,14 @@ class Orchestrator:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    async def analyze_contract(self, text: str) -> dict:
+    async def analyze_contract(self, text: str, language: str = "en") -> dict:
         """
         Analyze contract text and return a risk report as a plain dict
         (ready to store in the session and serialize to JSON).
+        language='ar' makes the user-facing fields Arabic (enums stay English).
         """
         agent = self._get_analysis_agent()
-        report = await agent.analyze(text)
-        # mode='json' ensures enum values are strings, datetimes are ISO strings, etc.
+        report = await agent.analyze(text, language=language)
         return report.model_dump(mode="json")
 
     async def handle_conversation_turn(

@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 # ── Make the agent package importable ────────────────────────────────────────
-# contract_service.py → services/ → app/ → backend/ → protectme-ai-agent/ → agent/
 _AGENT_ROOT = Path(__file__).resolve().parent.parent.parent.parent / "agent"
 if str(_AGENT_ROOT) not in sys.path:
     sys.path.insert(0, str(_AGENT_ROOT))
@@ -22,7 +21,7 @@ from app.core.exceptions import (
 )
 from app.repositories.session_repository import session_repository
 from app.schemas.session_schema import Session
-from app.utils.file_utils import extract_text_from_pdf
+from app.utils.file_utils import extract_text_from_docx, extract_text_from_pdf
 from app.utils.text_utils import clean_contract_text, truncate_contract_text
 
 logger = logging.getLogger(__name__)
@@ -52,14 +51,17 @@ def _get_orchestrator():
 class ContractService:
     """Orchestrates contract analysis: text/PDF in → session with risk report out."""
 
-    async def analyze_from_text(self, text: str) -> Session:
-        """Analyze raw contract text and persist a new session."""
+    async def analyze_from_text(self, text: str, language: str = "en") -> Session:
+        """Analyze raw contract text and persist a new session.
+        language='ar' makes the user-facing risk fields Arabic; it is also stored
+        on the session so the voice agent can default to that language."""
         if not settings.is_gemini_configured:
             raise GeminiNotConfiguredError()
         if not text or not text.strip():
             raise InvalidContractError("Contract text cannot be empty.")
 
-        logger.info("[Agent] Upload received — analyzing contract text.")
+        lang = "ar" if str(language or "").lower().startswith("ar") else "en"
+        logger.info("[Agent] Upload received — analyzing contract text (lang=%s).", lang)
 
         clean = clean_contract_text(text)
         truncated = truncate_contract_text(clean)
@@ -69,7 +71,7 @@ class ContractService:
         try:
             orchestrator = _get_orchestrator()
             logger.info("[Agent] Gemini Pro analysis started.")
-            risk_report_dict = await orchestrator.analyze_contract(truncated)
+            risk_report_dict = await orchestrator.analyze_contract(truncated, language=lang)
         except Exception as exc:
             logger.error("[Agent] Analysis failed: %s", exc)
             raise ContractAnalysisError(str(exc)) from exc
@@ -82,6 +84,7 @@ class ContractService:
             session.session_id,
             contract_text=truncated,
             risk_report=risk_report_dict,
+            language=lang,
             debug_logs=[
                 "[Agent] Upload received",
                 "[Agent] Extracting contract text",
@@ -90,10 +93,9 @@ class ContractService:
                 f"[Agent] {risk_count} risks detected",
             ],
         )
-        # Return the updated session
         return session_repository.get(session.session_id)
 
-    async def analyze_from_pdf(self, file_bytes: bytes, filename: str) -> Session:
+    async def analyze_from_pdf(self, file_bytes: bytes, filename: str, language: str = "en") -> Session:
         """Extract text from a PDF and run the standard analysis pipeline."""
         if not settings.is_gemini_configured:
             raise GeminiNotConfiguredError()
@@ -106,7 +108,22 @@ class ContractService:
         except RuntimeError as exc:
             raise ContractAnalysisError(str(exc)) from exc
 
-        return await self.analyze_from_text(text)
+        return await self.analyze_from_text(text, language=language)
+
+    async def analyze_from_docx(self, file_bytes: bytes, filename: str, language: str = "en") -> Session:
+        """Extract text from a Word (.docx) file and run the standard analysis pipeline."""
+        if not settings.is_gemini_configured:
+            raise GeminiNotConfiguredError()
+
+        logger.info("[Agent] DOCX upload received — extracting text from '%s'.", filename)
+        try:
+            text = extract_text_from_docx(file_bytes)
+        except ValueError as exc:
+            raise InvalidContractError(str(exc)) from exc
+        except RuntimeError as exc:
+            raise ContractAnalysisError(str(exc)) from exc
+
+        return await self.analyze_from_text(text, language=language)
 
 
 contract_service = ContractService()

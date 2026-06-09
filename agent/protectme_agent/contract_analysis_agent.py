@@ -40,14 +40,12 @@ def _extract_json(text: str) -> dict | None:
     """
     import re
 
-    # 1. Direct parse
     stripped = text.strip()
     try:
         return json.loads(stripped)
     except json.JSONDecodeError:
         pass
 
-    # 2. Strip markdown fences
     for pattern in (r"```(?:json)?\s*([\s\S]+?)\s*```", r"`([\s\S]+?)`"):
         match = re.search(pattern, stripped, re.DOTALL)
         if match:
@@ -56,7 +54,6 @@ def _extract_json(text: str) -> dict | None:
             except json.JSONDecodeError:
                 continue
 
-    # 3. Find the outermost { … } block
     start, end = stripped.find("{"), stripped.rfind("}")
     if start != -1 and end > start:
         try:
@@ -76,19 +73,20 @@ class ContractAnalysisAgent:
     def __init__(self, gemini_client: "GeminiClient"):
         self.client = gemini_client
 
-    async def analyze(self, contract_text: str) -> RiskReport:
+    async def analyze(self, contract_text: str, language: str = "en") -> RiskReport:
         """
         Run the full analysis pipeline and return a validated RiskReport.
+        language='ar' makes the user-facing fields Arabic (enums stay English).
 
         Raises:
             ValueError: if JSON cannot be parsed even after repair.
             pydantic.ValidationError: if the parsed JSON doesn't match the schema.
         """
-        logger.info("[Agent] Contract analysis started — %d chars", len(contract_text))
+        logger.info("[Agent] Contract analysis started — %d chars (lang=%s)",
+                    len(contract_text), language)
 
-        prompt = build_analysis_prompt(contract_text)
+        prompt = build_analysis_prompt(contract_text, language=language)
 
-        # ── Attempt 1: standard analysis ─────────────────────────────────────
         raw = await self.client.generate(
             prompt=prompt,
             system=SYSTEM_PROMPT,
@@ -100,7 +98,6 @@ class ContractAnalysisAgent:
 
         data = _extract_json(raw)
 
-        # ── Attempt 2: JSON repair ────────────────────────────────────────────
         if data is None:
             logger.warning(
                 "[Agent] Could not parse JSON from first attempt — retrying with repair prompt."
@@ -108,7 +105,7 @@ class ContractAnalysisAgent:
             repair_prompt = build_repair_prompt(raw)
             repaired_raw = await self.client.generate(
                 prompt=repair_prompt,
-                model=self.client.conversation_model,  # faster model for repair
+                model=self.client.conversation_model,  
                 json_mode=True,
                 temperature=0.0,
             )
@@ -125,10 +122,8 @@ class ContractAnalysisAgent:
             len(data.get("risks", [])),
         )
 
-        # ── Pydantic validation ───────────────────────────────────────────────
         report = RiskReport(**data)
 
-        # ── Sort risks High → Medium → Low ────────────────────────────────────
         report.risks.sort(key=lambda r: _SEVERITY_ORDER.get(r.severity, 9))
 
         high = sum(1 for r in report.risks if r.severity == RiskSeverity.HIGH)

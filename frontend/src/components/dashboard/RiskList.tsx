@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { LucideIcon } from "@/components/ui/Icon";
 import { RiskCard } from "@/components/dashboard/RiskCard";
 import { SEVERITY_ORDER, type RiskItem, type FilterTab } from "@/lib/types";
+import { useTranslations } from "next-intl";
 
 interface RiskListProps {
   risks: RiskItem[];
@@ -23,12 +24,18 @@ export function RiskList({
   onAsk,
   onGenerate,
 }: RiskListProps) {
+  const t = useTranslations("RiskList");
+
   const [expandedId, setExpandedId] = useState<string | null>(
-    risks.length > 0 ? risks[0].id : null,
+    risks.length > 0 ? null : null,
   );
 
   const sorted = useMemo(
-    () => [...risks].sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3)),
+    () =>
+      [...risks].sort(
+        (a, b) =>
+          (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3),
+      ),
     [risks],
   );
 
@@ -47,16 +54,16 @@ export function RiskList({
 
   if (visible.length === 0) {
     return (
-      <div className="empty">
-        <LucideIcon name="search-x" size={28} />
-        <h3>No risks match</h3>
-        <p>Try a different filter or search term.</p>
+      <div className="empty flex flex-col justify-center items-center ">
+        <LucideIcon name="search-x" size={48} color="#333" />
+        <h3 className="font-bold">{t("empty_title")}</h3>
+        <p className="text-slate-500">{t("empty_subtitle")}</p>
       </div>
     );
   }
 
   return (
-    <div className="risklist">
+    <div className="risklist w-full">
       {visible.map((r) => (
         <RiskCard
           key={r.id}

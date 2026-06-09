@@ -1,0 +1,190 @@
+{
+  "Nav": {
+    "how_it_works": "How it works",
+    "new_contract": "New contract",
+    "go_home": "Go to home",
+    "ai_tag": "AI",
+    "ar": "Ar",
+    "en": "En"
+  },
+  "Landing": {
+    "hero": {
+      "eyebrow": "Next-Gen Contract Intelligence",
+      "title_main": "Understand before",
+      "title_highlight": "you sign",
+      "description": "SafePact AI analyzes every clause in seconds, highlighting risks in plain language so you can sign with total confidence."
+    },
+    "tabs": {
+      "file": "Upload File",
+      "paste": "Paste Text"
+    },
+    "privacy_note": "Your contract stays private. We analyze it to build your report and never sell your data.",
+    "how_it_works": "How it works"
+  },
+  "Dropzone": {
+    "idle": {
+      "title": "Drop your contract",
+      "subtitle": "Securely upload your agreement to start the risk analysis.",
+      "button": "Select Document",
+      "sample_link": "Looking for an example?",
+      "sample_action": "Try a sample lease"
+    },
+    "uploading": {
+      "title": "Reading clauses...",
+      "subtitle": "Our AI is analyzing every word for potential risks.",
+      "processed": "Processed"
+    },
+    "error": {
+      "title": "Unsupported file type",
+      "subtitle": "Please use PDF, DOCX, or TXT files for the best analysis results.",
+      "button": "Try another file"
+    }
+  },
+  "PasteInput": {
+    "placeholder": "Paste the contract text here... Our Agent will read it immediately.",
+    "char_count": "Character Count",
+    "min_chars_warning": "Need 50+ chars",
+    "analyze_button": "Analyze Text",
+    "analyzing": "Analyzing..."
+  },
+  "HowItWorks": {
+    "step_label": "Step",
+    "steps": {
+      "step1": {
+        "title": "1. Seamless Ingestion",
+        "desc": "Simply drop your PDF or text file. Our system extracts every clause with neural precision."
+      },
+      "step2": {
+        "title": "2. Review every risk",
+        "desc": "See all detected risks, sorted by severity, explained in plain language."
+      },
+      "step3": {
+        "title": "3. Ask before you agree",
+        "desc": "Generate a message or talk to your agent about anything you've read."
+      }
+    },
+    "visuals": {
+      "step3_user": "Is the exit clause fair?",
+      "step3_agent": "Analyzing liability..."
+    }
+  },
+  "Disclaimer": {
+    "text": "SafePact AI helps you understand contracts. It does not replace a lawyer or provide legal advice."
+  },
+  "Dashboard": {
+    "header": {
+      "label": "Analysis Report",
+      "session": "Session"
+    },
+    "stats": {
+      "contract_type": "Contract Type",
+      "overall_assessment": "Overall Assessment",
+      "findings": "Findings",
+      "detected": "Detected",
+      "final_advice": "Final Advice",
+      "severity_counts": "{count} {severity}"
+    },
+    "filters": {
+      "all": "All",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "search_placeholder": "Search risks..."
+    },
+    "download_pdf": "Download PDF Report",
+    "preparing_pdf": "Preparing PDF…"
+  },
+  "Severity": {
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+    "minimal": "Minimal",
+    "risk_suffix": "risk"
+  },
+  "RiskList": {
+    "empty_title": "No risks match",
+    "empty_subtitle": "Try a different filter or search term."
+  },
+  "RiskCard": {
+    "original_text": "Original Legal Text :",
+    "plain_terms": "In Plain Terms",
+    "why_it_matters": "Why it Matters",
+    "ask_agent": "Ask Agent",
+    "generate_message": "Generate Message",
+    "selected": "Selected",
+    "select_action": "Select for Action",
+    "fallback": "This may create extra cost, responsibility, or uncertainty if not clarified."
+  },
+  "MessagePanel": {
+    "header_title": "AI Message Draft",
+    "header_subtitle": "Professional Assistant",
+    "context": "Context",
+    "risks_count": "{count} Risks",
+    "goal_label": "Inquiry Goal",
+    "tone_label": "Tone",
+    "format_label": "Format",
+    "button_generate": "Generate Message",
+    "button_regenerate": "Regenerate Draft",
+    "ai_response": "AI Response",
+    "text": "SafePact AI helps you understand contracts. It does not replace a lawyer or provide legal advice.",
+    "tooltips": {
+      "copy": "Copy to Clipboard",
+      "shorter": "Make Shorter",
+      "formal": "More Formal"
+    },
+    "options": {
+      "clarification": "Clarify",
+      "negotiation": "Negotiate",
+      "rejection": "Reject",
+      "amendment_request": "Amend",
+      "polite": "Polite",
+      "firm": "Firm",
+      "professional": "Pro",
+      "email": "Email",
+      "whatsapp": "WhatsApp"
+    }
+  },
+  "ActionBar": {
+    "talk_to_agent": "Talk to Agent",
+    "call_agent": "Call Agent",
+    "generate_message": "Generate Message",
+    "risks_selected": "Risk{count, plural, =1 {} other {s}} Selected",
+    "select_placeholder": "Select risks to draft a message"
+  },
+  "VoicePanel": {
+    "header": {
+      "title": "Legal Assistant",
+      "subtitle": "Neural Audio Session"
+    },
+    "status": {
+      "connecting": "Connecting...",
+      "connected": "Connected",
+      "ready": "Ready",
+      "listening": "Listening...",
+      "thinking": "Thinking...",
+      "speaking": "Speaking...",
+      "ended": "Session Ended",
+      "reconnecting": "Reconnecting..."
+    },
+    "empty_state": "Start talking to analyze this document together",
+    "roles": {
+      "user": "You",
+      "agent": "Agent"
+    },
+    "placeholders": {
+      "live": "Ask Gemini Live anything...",
+      "mic": "Type or use the mic...",
+      "no_mic": "Type your question (Mic unavailable)..."
+    },
+    "draft": {
+      "title": "AI Draft Ready",
+      "copy": "Copy"
+    },
+    "footer": "Privacy SafePact AI Session",
+    "errors": {
+      "connection_lost": "Connection Lost",
+      "backend_offline": "Backend Offline",
+      "retry": "Try Reconnecting"
+    }
+  }
+}

@@ -42,7 +42,7 @@ This lease is between LANDLORD and TENANT for the property at 123 Main Street.
    for any breach, at sole discretion.
 """
 
-AUDIO_TIMEOUT = 120  # seconds — TTS can take up to 30s under API load
+AUDIO_TIMEOUT = 120 
 
 
 def sec(t):
@@ -83,8 +83,8 @@ async def collect_turn(ws, label, expected_turn_id=1, timeout=AUDIO_TIMEOUT):
     """
     result = {
         "sentences": [],
-        "audio_chunks": [],        # only chunks matching expected_turn_id
-        "other_turn_chunks": [],   # late chunks from greeting or prior turns
+        "audio_chunks": [],       
+        "other_turn_chunks": [],   
         "tts_errors": [],
         "draft_ready": False,
         "draft_text": "",
@@ -92,7 +92,7 @@ async def collect_turn(ws, label, expected_turn_id=1, timeout=AUDIO_TIMEOUT):
         "t_first_sentence": None,
         "t_first_audio": None,
         "t_audio_done": None,
-        "seq_order": [],           # seq values in arrival order (current turn only)
+        "seq_order": [],          
     }
     t_start = time.monotonic()
     while True:
@@ -254,14 +254,12 @@ async def run_e2e():
         print(f"  draft_ready:        {r['draft_ready']}")
         if r["draft_ready"] and r["draft_text"]:
             print(f"  Draft preview:      '{r['draft_text'][:80]}...'")
-        # Q3 (draft) has no sentences by design — success = draft_ready
         ok = len(r["sentences"]) > 0 or r["draft_ready"]
         print(f"  Status:             {'PASS' if ok else 'FAIL'}")
 
     audio_ok = any(len(r["audio_chunks"]) > 0 for r in [q1, q2, q3])
     print(f"\nAudio chunks received:  {'YES' if audio_ok else 'NO - TTS pipeline issue'}")
     print(f"draft_ready working:    {q3['draft_ready']}")
-    # Q3 success = draft_ready (no sentence events for generate_message by design)
     all_ok = (
         len(q1["sentences"]) > 0 and len(q1["audio_chunks"]) > 0 and
         len(q2["sentences"]) > 0 and len(q2["audio_chunks"]) > 0 and
