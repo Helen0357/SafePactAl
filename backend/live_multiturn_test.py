@@ -90,7 +90,6 @@ async def run():
     closed_early = False
 
     async with websockets.connect(ws_url, max_size=20 * 1024 * 1024) as ws:
-        # Drain handshake (status/debug/sentence)
         for _ in range(6):
             try:
                 ev = json.loads(await asyncio.wait_for(ws.recv(), timeout=20))
@@ -112,7 +111,6 @@ async def run():
                 break
             print(f"   chunks={n}  first_audio={first}s  rate(s)={sorted(rates) or '—'}")
             results.append((label, n, first, rates))
-            # Connection must still be open for the next turn
             print(f"   ws.open after turn = {ws.state.name}")
 
     print("\n" + "=" * 64)

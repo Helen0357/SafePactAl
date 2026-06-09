@@ -30,6 +30,6 @@ async def handle_download_pdf(session_id: str, language: str = "en") -> bytes:
 
     try:
         return generate_risk_report_pdf(session.risk_report, language=language or "en")
-    except Exception as exc:  # noqa: BLE001 — never leak a stack trace to the client
+    except Exception as exc:  
         logger.error("[Report] PDF generation failed for session %s: %s", session_id, exc)
         raise HTTPException(status_code=500, detail="Failed to generate the PDF report.") from exc

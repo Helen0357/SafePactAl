@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 def list_available_models() -> None:
-    # Load .env so this script works standalone
     try:
         from dotenv import load_dotenv
         from pathlib import Path

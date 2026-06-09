@@ -24,7 +24,6 @@ You are NOT a lawyer. Do NOT use legal jargon. Do NOT provide legal opinions.
 Frame everything as "you may want to ask" or "this could mean", never as legal advice.
 """
 
-# Schema hint embedded in the user prompt to anchor Gemini's output format
 SCHEMA_HINT = """\
 {
   "contract_type": "string — e.g. Rental Agreement, Employment Contract, Service Agreement",
@@ -65,8 +64,7 @@ CONTRACT TEXT:
 
 Return ONLY the JSON object. No other text before or after it."""
 
-# When the UI language is Arabic, the user-facing TEXT fields must be Arabic, but
-# the structural/enum fields stay English so internal logic + validation work.
+
 _ARABIC_INSTRUCTION = """
 LANGUAGE INSTRUCTION (IMPORTANT):
 Write ALL user-facing text fields in clear Modern Standard Arabic (العربية):
@@ -90,7 +88,6 @@ def build_analysis_prompt(contract_text: str, language: str = "en") -> str:
     )
 
 
-# Retry prompt used when Gemini's first response cannot be parsed as JSON
 JSON_REPAIR_PROMPT_TEMPLATE = """\
 The text below was supposed to be a JSON object but it is not valid JSON.
 Please fix it so it is valid JSON and return ONLY the corrected JSON object.

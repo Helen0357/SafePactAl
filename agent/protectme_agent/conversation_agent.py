@@ -66,18 +66,11 @@ class ConversationAgent:
 
         report = session.risk_report
 
-        # Effective response language for this turn: the session/UI language
-        # (Arabic for an Arabic UI, even when the contract is English), unless the
-        # user explicitly asks otherwise this turn ("explain in English" / "بالعربي").
-        # Computed first so even the PDF fast path can confirm in the right language.
+       
         session_lang = fp.normalize_language(getattr(session, "language", "en"))
         turn_lang = fp.resolve_response_language(user_text, session_lang)
 
-        # 0. PDF report download ("download/generate the report as a PDF", and the
-        #    Arabic equivalents like "تنزيل الملف"/"حمّل التقرير"). Pure fast-path,
-        #    no Gemini: emit a download_pdf event the frontend turns into a direct
-        #    browser download using the existing risk_report. The spoken confirmation
-        #    follows the turn language (Arabic UI / Arabic request → Arabic).
+       
         if report and fp.wants_pdf(user_text):
             pdf_msg = (
                 "تم تجهيز تقرير PDF لك."
@@ -90,20 +83,14 @@ class ConversationAgent:
             yield {"type": "status", "state": "idle", "label": "Ready"}
             return
 
-        # 1. Modify the most recent generated draft (memory of last action).
-        #    Guard: a clear "write a (new) message" request is a generation, not
-        #    an edit — e.g. "write a whatsapp message, make it short".
+        
         if (report and fp.wants_modify(user_text) and not fp.wants_generate(user_text)
                 and getattr(session, "generated_messages", None)):
             async for event in self._handle_modify_message(user_text, session):
                 yield event
             return
 
-        # 2. Selected (multiple) clauses — persists for the whole panel session.
-        #    Explicit ("explain these clauses", "write a message about these") OR a
-        #    follow-up that reuses the selection ("explain them again", "easier",
-        #    "what about them", "both", "compare"). Uses session.selected_clause_ids
-        #    (NOT all risks). Handles English + Arabic; runs before generic paths.
+       
         selected_ids = [
             cid for cid in (getattr(session, "selected_clause_ids", None) or [])
             if fp._find(report, cid)
@@ -119,29 +106,23 @@ class ConversationAgent:
                     yield event
                 return
 
-        # 3. Arabic — when the effective turn language is Arabic (Arabic UI, Arabic
-        #    text, or "explain in Arabic"), answer in Arabic via the Arabic-aware
-        #    handler (same intents, Arabic output) — even for an English contract.
+     
         if report and turn_lang == "ar":
             async for event in self._handle_arabic_routed(user_text, session):
                 yield event
             return
 
-        # 4. Explicit clause / risk number reference ("explain clause 6").
-        #    Runs before the generic explain fast path so a number reference
-        #    overrides any stale active clause.
+     
         if report and fp.parse_clause_number(user_text) is not None:
             async for event in self._handle_clause_number(user_text, session):
                 yield event
             return
 
-        # 4. Severity-specific query ("the low risk", "first high risk").
         if report and fp.severity_query(user_text) is not None:
             async for event in self._handle_severity_query(user_text, session):
                 yield event
             return
 
-        # 5. Deeper / easier explanation of the focused clause (richer, not a repeat).
         if report and fp.wants_detail(user_text) and session.active_clause_id:
             detail = fp.build_detail_explain_answer(report, session.active_clause_id)
             if detail:
@@ -152,16 +133,14 @@ class ConversationAgent:
                 yield {"type": "status", "state": "idle", "label": "Ready"}
                 return
 
-        # 6. Deterministic fast path from the risk_report (no Gemini).
         if report:
             async for event in self._try_fast_path(user_text, session):
                 if event.get("type") == "__fastpath_miss__":
-                    break  # not handled — continue below
+                    break  
                 yield event
             else:
-                return  # generator finished without a miss → fully handled
+                return  
 
-        # 7. Situational recommendation (careful, contextual, never legal certainty).
         if report and fp.is_recommendation(user_text):
             async for event in self._handle_recommendation(user_text, session):
                 yield event
@@ -199,7 +178,6 @@ class ConversationAgent:
             async for event in self._handle_generate_questions(intent_result, session):
                 yield event
         else:
-            # ask_question, summarize_risks, ask_recommendation, modify_message
             async for event in self._handle_general(user_text, session):
                 yield event
 
@@ -221,17 +199,12 @@ class ConversationAgent:
         report = session.risk_report
         active_id = session.active_clause_id
 
-        # generate_message still uses the tool to write the draft, but we skip
-        # the intent-router round-trip and trigger it deterministically — ONLY
-        # when a clause is in focus. Without an active clause we can't know which
-        # clause the message is about, so fall through to the router (the LLM can
-        # resolve clause references from the user's phrasing).
+   
         if key == fp.GENERATE_MESSAGE:
             if not active_id:
                 yield {"type": "__fastpath_miss__"}
                 return
-            # Parse the channel (WhatsApp vs email) and any "make it short" hint
-            # from the user text so the draft matches what they actually asked for.
+            
             fmt = fp.detect_message_format(user_text)
             extra = fp.message_extra_instruction(user_text)
             yield {
@@ -264,8 +237,7 @@ class ConversationAgent:
             yield {"type": "debug", "log": f"[FastPath] explain_active_clause using {active_id}"}
         yield {"type": "debug", "log": f"[FastPath] answered={key} (no Gemini call)"}
 
-        # Note: we do NOT emit a "speaking" status here. The frontend flips to
-        # "speaking" only when audio playback actually begins (real state).
+      
         sentences = ans if isinstance(ans, list) else [ans]
         for s in sentences:
             if s and s.strip():
@@ -331,10 +303,7 @@ class ConversationAgent:
 
         message_type = intent_result.message_type or "clarification"
         tone = intent_result.tone or "professional"
-        # Format/length/language are taken from the user's ACTUAL words when present
-        # (the router sometimes guesses email; the user's "whatsapp"/"قصيرة" wins).
-        # lang_override (the session/turn language) wins when provided, so an Arabic
-        # UI produces an Arabic draft even when the user typed the request in English.
+
         lang = lang_override or (fp.detect_language(user_text) if user_text else "en")
         fmt = (
             (fp.detect_message_format(user_text) if user_text else None)
@@ -342,9 +311,7 @@ class ConversationAgent:
             or "email"
         )
 
-        # Build a rich instruction that PRESERVES the user's exact request + details
-        # (names, animals, amounts, dates, waiver/exemption asks) so the draft is
-        # never a generic template.
+
         directives: list[str] = []
         if lang == "ar":
             directives.append("Write the entire message in Arabic (العربية), simple and natural.")
@@ -554,7 +521,7 @@ class ConversationAgent:
                     yield {"type": "sentence", "text": sentence}
                 yield {"type": "status", "state": "idle", "label": "Ready"}
                 return
-            except Exception as exc:  # model unavailable / transient — try next
+            except Exception as exc: 
                 last_exc = exc
                 logger.warning("Voice fallback model %s failed: %s", model_name, exc)
                 if produced:
@@ -602,7 +569,6 @@ class ConversationAgent:
         if reused:
             yield {"type": "debug", "log": "[FastPath] selected clauses context reused"}
 
-        # Generate a message about the selected clauses ("write a message about these").
         if fp.wants_generate(user_text):
             yield {"type": "debug", "log": f"[FastPath] generate_message using selected {','.join(selected_ids)}"}
             fmt = fp.detect_message_format(user_text)
@@ -624,7 +590,6 @@ class ConversationAgent:
         yield {"type": "debug", "log": f"[FastPath] explain_selected_clauses using {','.join(selected_ids)}"}
 
         if lang == "ar":
-            # Arabic: focus the fast model on exactly the selected clauses' data.
             report = session.risk_report or {}
             lines = []
             for i, cid in enumerate(selected_ids, start=1):
@@ -642,7 +607,6 @@ class ConversationAgent:
                 yield event
             return
 
-        # English: deterministic structured answer (no Gemini).
         ans = fp.build_selected_clauses_answer(session.risk_report, selected_ids)
         for sentence in (ans if isinstance(ans, list) else [ans]):
             if sentence and sentence.strip():
@@ -665,7 +629,6 @@ class ConversationAgent:
         key = fp.match_fast_path(user_text) or fp.match_arabic_intent(user_text)
         yield {"type": "debug", "log": f"[Arabic] lang=ar intent={key or 'general'}"}
 
-        # Generate an Arabic message draft (needs a focused clause, like English).
         if key == fp.GENERATE_MESSAGE and session.active_clause_id:
             fmt = fp.detect_message_format(user_text)
             extra_bits = ["Write the entire message in Arabic (العربية)."]
@@ -716,7 +679,6 @@ class ConversationAgent:
 
         drafts = getattr(session, "generated_messages", None) or []
         last = drafts[-1]
-        # GeneratedMessage may be a pydantic model or a dict depending on caller.
         def _g(obj, key, default=""):
             return getattr(obj, key, None) if not isinstance(obj, dict) else obj.get(key, default)
         prev_draft = _g(last, "draft", "") or ""
@@ -726,7 +688,6 @@ class ConversationAgent:
         fmt = _g(last, "format", "email") or "email"
 
         if not prev_draft:
-            # Nothing to modify — fall back to a normal answer.
             async for event in self._handle_general(user_text, session):
                 yield event
             return
@@ -760,8 +721,7 @@ class ConversationAgent:
             yield {"type": "status", "state": "idle", "label": "Ready"}
             return
 
-        # Spoken confirmation + updated draft. The tool_result lets VoiceService
-        # persist the revised draft as the new "latest" (so further tweaks chain).
+   
         yield {"type": "sentence", "text": fp.modify_confirmation(user_text)}
         yield {
             "type": "tool_result",
@@ -795,12 +755,10 @@ class ConversationAgent:
             recommendation = rr.get("final_recommendation", "Review carefully")
             risks = rr.get("risks", [])
 
-            # Rank risks by severity so the most important appear first/most.
             order = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
             ranked = sorted(risks, key=lambda r: order.get(r.get("severity", "Medium"), 9))
 
-            # Severity breakdown so the model NEVER claims a severity has no items
-            # when the report actually contains them.
+      
             counts: dict[str, int] = {}
             for r in risks:
                 sev = r.get("severity", "Medium")
@@ -819,7 +777,6 @@ class ConversationAgent:
                 f"Severity breakdown: {breakdown or 'none'}",
                 "All risks (severity-ranked):",
             ]
-            # List ALL risks (every severity) so low/medium queries are answerable.
             for r in ranked[:12]:
                 lines.append(
                     f"  - [{r.get('severity', '?')}] {r.get('title', 'Risk')}: "
@@ -834,7 +791,6 @@ class ConversationAgent:
                         f"\"{active.get('title', '')}\" — {active.get('simple_explanation', '')}"
                     )
 
-            # Conversation memory: the clauses the user selected for this session.
             sel_ids = [
                 cid for cid in (getattr(session, "selected_clause_ids", None) or [])
                 if next((r for r in risks if r.get("id") == cid), None)
@@ -849,8 +805,7 @@ class ConversationAgent:
                     + "; ".join(f"{cid} \"{t}\"" for cid, t in zip(sel_ids, sel_titles))
                 )
 
-            # Conversation memory: the most recent message draft (so follow-ups
-            # like "make it more formal" or questions about it have context).
+         
             drafts = getattr(session, "generated_messages", None) or []
             if drafts:
                 last = drafts[-1]

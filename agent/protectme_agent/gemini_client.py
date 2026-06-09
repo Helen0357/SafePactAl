@@ -32,7 +32,6 @@ class GeminiClient:
         self.analysis_model = analysis_model
         self.conversation_model = conversation_model
         self.live_model = live_model
-        # Fastest model for short voice fallback answers; empty → conversation_model.
         self.voice_fallback_model = voice_fallback_model or conversation_model
         self._client = None
 
@@ -60,7 +59,7 @@ class GeminiClient:
             if name.startswith("gemini-3"):
                 return types.ThinkingConfig(thinking_level="minimal")
             return types.ThinkingConfig(thinking_budget=0)
-        except Exception:  # older SDK / unsupported field
+        except Exception: 
             try:
                 return types.ThinkingConfig(thinking_budget=0)
             except Exception:
@@ -88,7 +87,6 @@ class GeminiClient:
             config_kwargs["response_mime_type"] = "application/json"
         if system:
             config_kwargs["system_instruction"] = system
-        # Low-latency thinking config (model-aware) so responses are fast.
         tc = self._thinking_config(model_name)
         if tc is not None:
             config_kwargs["thinking_config"] = tc
@@ -126,7 +124,6 @@ class GeminiClient:
         config_kwargs: dict = {"temperature": temperature}
         if system:
             config_kwargs["system_instruction"] = system
-        # Voice answers must be snappy: minimal thinking (Gemini 3) / budget 0 (2.x).
         tc = self._thinking_config(model_name)
         if tc is not None:
             config_kwargs["thinking_config"] = tc

@@ -78,7 +78,6 @@ def _sentences(events):
     return " ".join(e["text"] for e in events if e["type"] == "sentence")
 
 
-# ── Pure detection / intent functions ─────────────────────────────────────────
 
 class TestArabicDetection:
     def test_detect_language_arabic_script(self):
@@ -111,7 +110,6 @@ class TestArabicDetection:
         assert message_extra_instruction("اكتب رسالة قصيرة") == "Make it short and concise."
 
 
-# ── Routing through the agent (Gemini mocked) ─────────────────────────────────
 
 class TestArabicRouting:
     def test_arabic_biggest_risk(self):
@@ -119,7 +117,7 @@ class TestArabicRouting:
         agent = ConversationAgent(_mock_client())
         events = asyncio.run(_collect(agent.handle_turn("ما أكبر خطر في العقد؟", _session())))
         assert "[Arabic] lang=ar intent=biggest_risk" in _debug(events)
-        assert _sentences(events).strip()  # produced an Arabic answer
+        assert _sentences(events).strip()  
 
     def test_arabic_explain_active_clause(self):
         from protectme_agent.conversation_agent import ConversationAgent
@@ -136,7 +134,6 @@ class TestArabicRouting:
         events = asyncio.run(_collect(
             agent.handle_turn("Explain this clause in Arabic", _session(active_clause_id="risk_001"))
         ))
-        # English phrasing, Arabic output requested → Arabic route, explain intent
         assert "[Arabic] lang=ar" in _debug(events)
         assert "intent=explain_active_clause" in _debug(events)
 
@@ -166,12 +163,10 @@ class TestArabicRouting:
         agent = ConversationAgent(_mock_client())
         events = asyncio.run(_collect(agent.handle_turn("What is the biggest risk?", _session())))
         said = _sentences(events)
-        # English deterministic biggest-risk answer (no Arabic routing, no Gemini)
         assert "Deposit Forfeiture" in said
         assert "[Arabic]" not in _debug(events)
 
 
-# ── Arabic TTS voice selection ────────────────────────────────────────────────
 
 class TestArabicVoiceSelection:
     def test_uses_configured_arabic_voice(self, monkeypatch):
@@ -190,7 +185,7 @@ class TestArabicVoiceSelection:
         monkeypatch.setattr(settings, "google_cloud_tts_arabic_language", "ar-XA")
         vs._arabic_fallback_warned = False
         voice, lang = vs._voice_for("هذا نص عربي", "en-US-Journey-D")
-        assert voice == ""        # empty name → Google picks a default ar-XA voice
+        assert voice == ""       
         assert lang == "ar-XA"
 
     def test_english_voice_unchanged(self, monkeypatch):

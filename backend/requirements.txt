@@ -1,4 +1,4 @@
-# ProtectMe AI — Backend Dependencies
+# SafePact AI — Backend Dependencies
 # Install: pip install -r requirements.txt
 
 # ── Web framework ──────────────────────────────────────────

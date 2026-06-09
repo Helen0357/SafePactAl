@@ -34,11 +34,6 @@ class RiskItem(BaseModel):
     suggested_action: str = Field("Review carefully", description="Clarify / Negotiate / Reject / Review carefully / Accept")
 
 
-# ── Field fallbacks ──────────────────────────────────────────────────────────
-# Gemini occasionally returns a risk with a blank field (most often
-# why_it_matters). Blank fields are filled with safe, category- or
-# severity-specific text so the UI / voice agent never shows an empty section.
-# (Keep this block in sync with agent/protectme_agent/schemas/risk_report_schema.py.)
 
 _CATEGORY_WHY: list[tuple[tuple[str, ...], str]] = [
     (("maintenance", "repair", "upkeep"),

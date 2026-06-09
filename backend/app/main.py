@@ -48,8 +48,6 @@ async def lifespan(app: FastAPI):
         )
 
     # ── Google Cloud credentials ───────────────────────────────────────────────
-    # Set GOOGLE_APPLICATION_CREDENTIALS before any TTS client is created.
-    # Path in .env is relative to backend/; resolve to absolute here.
     if settings.google_application_credentials:
         creds_path = Path(settings.google_application_credentials)
         if not creds_path.is_absolute():
@@ -72,8 +70,6 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             logger.warning("Gemini client warm-up failed: %s", exc)
 
-    # TTS warm-up — synthesize a short phrase to prime the connection pool.
-    # Runs in background so app startup is not delayed if TTS is slow/unavailable.
     asyncio.create_task(_warmup_tts())
 
     cleanup_task = asyncio.create_task(_session_cleanup_loop())
@@ -104,7 +100,7 @@ async def _warmup_tts() -> None:
             "Ready.",
             google_cloud_api_key=settings.google_cloud_tts_api_key,
             gemini_api_key=settings.gemini_api_key,
-            voice_name=settings.google_cloud_tts_voice,  # prime the actual demo voice
+            voice_name=settings.google_cloud_tts_voice,  
         )
         if result:
             logger.info("TTS warm-up OK — %d bytes synthesized.", len(result))
@@ -120,7 +116,7 @@ async def _warmup_tts() -> None:
 async def _session_cleanup_loop() -> None:
     """Periodically evict sessions that have been idle beyond TTL."""
     while True:
-        await asyncio.sleep(300)  # every 5 minutes
+        await asyncio.sleep(300)  
         try:
             session_service.cleanup_expired_sessions()
         except Exception:

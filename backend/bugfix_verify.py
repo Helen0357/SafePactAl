@@ -58,7 +58,6 @@ async def run():
     data = r.json(); sid = data["session_id"]; risks = data["risk_report"]["risks"]
     print(f"session={sid[:8]}  {len(risks)} risks")
 
-    # #1/#2 — every risk has a non-empty why_it_matters (and all fields)
     blanks = []
     for x in risks:
         for f in ("title", "severity", "category", "clause_text",
@@ -88,7 +87,6 @@ async def run():
             if ev.get("type") == "audio_done":
                 break
 
-        # #3 — whatsapp + short
         r3 = await turn(ws, "Write a WhatsApp message about this, make it short.")
         wa = any("format=whatsapp" in d for d in r3["debug"])
         short = any("Make it short" in d for d in r3["debug"])
@@ -97,7 +95,6 @@ async def run():
         if r3["draft"]:
             print(f"   draft head: {r3['draft'][:80]!r}")
 
-        # #4 — low risk
         r4 = await turn(ws, "Explain the low risk.")
         said4 = r4["said"].lower()
         print(f"\n#4 low risk query: {'PASS' if 'no low-risk' not in said4 and ('low-risk' in said4 or 'low risk' in said4) else 'REVIEW'} "
@@ -105,7 +102,6 @@ async def run():
         print(f"   said: {r4['said'][:160]}")
         print(f"   debug: {[d for d in r4['debug'] if 'FastPath' in d or 'severity' in d]}")
 
-        # #5 — clause number (use an id that exists)
         n = int(risks[min(2, len(risks)-1)]["id"].split("_")[1])
         r5 = await turn(ws, f"Explain clause {n}.")
         target_title = risks[min(2, len(risks)-1)]["title"]
@@ -114,7 +110,6 @@ async def run():
         print(f"   said: {r5['said'][:160]}")
         print(f"   debug: {[d for d in r5['debug'] if 'FastPath' in d]}")
 
-        # #7 (audio_done present, no stall) across the turns above
         dones = [r3["done"], r4["done"], r5["done"]]
         print(f"\n#7 audio_done turn_ids present (no stall): {'PASS' if all(d is not None for d in dones) else 'FAIL'} -> {dones}")
         errs = [r3["error"], r4["error"], r5["error"]]

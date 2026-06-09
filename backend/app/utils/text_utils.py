@@ -4,7 +4,6 @@ from typing import List
 
 logger = logging.getLogger(__name__)
 
-# Well within Gemini 1.5 Pro's 1M-token context window
 MAX_CONTRACT_CHARS = 500_000
 
 

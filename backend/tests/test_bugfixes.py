@@ -16,7 +16,6 @@ import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-# tests/ -> backend/ -> protectme-ai-agent/ -> agent/
 _AGENT_ROOT = Path(__file__).resolve().parent.parent.parent / "agent"
 if str(_AGENT_ROOT) not in sys.path:
     sys.path.insert(0, str(_AGENT_ROOT))
@@ -26,7 +25,6 @@ import pytest
 from app.schemas.session_schema import Session
 
 
-# A report with a known severity mix: 2 High, 2 Medium, 2 Low.
 REPORT = {
     "contract_type": "Rental Agreement",
     "overall_risk": "High",
@@ -94,7 +92,6 @@ def _mock_client():
     return mock
 
 
-# ── #1/#2 — normalization ─────────────────────────────────────────────────────
 
 class TestNormalization:
     def _report_with_blank(self, **overrides):
@@ -104,7 +101,7 @@ class TestNormalization:
             "severity": "Medium", "category": "Maintenance",
             "clause_text": "Tenant pays all AC maintenance.",
             "simple_explanation": "You pay for AC upkeep.",
-            "why_it_matters": "",  # blank — must be filled
+            "why_it_matters": "",  
             "question_to_ask": "", "suggested_action": "",
         }
         risk.update(overrides)
@@ -114,7 +111,6 @@ class TestNormalization:
         report = self._report_with_blank()
         why = report.risks[0].why_it_matters
         assert why.strip()
-        # Maintenance category → maintenance-specific fallback
         assert "maintenance" in why.lower() or "repair" in why.lower()
 
     def test_blank_why_uses_severity_when_no_category_match(self):
@@ -124,7 +120,6 @@ class TestNormalization:
 
     def test_all_required_fields_non_empty(self):
         from protectme_agent.schemas.risk_report_schema import RiskReport
-        # Every text field blank except id/severity
         report = RiskReport(
             contract_type="Rental", overall_risk="High",
             risks=[{"id": "risk_001", "title": "", "severity": "High",
@@ -152,7 +147,6 @@ class TestNormalization:
         assert report.risks[0].why_it_matters == "Custom explanation kept."
 
 
-# ── #3 — message format parsing ───────────────────────────────────────────────
 
 class TestMessageFormatParsing:
     def test_detect_whatsapp(self):
@@ -197,10 +191,8 @@ class TestMessageFormatParsing:
         from protectme_agent.fast_path import wants_generate, wants_modify
         text = "write a whatsapp message make it short"
         assert wants_generate(text) is True
-        # Even though "short" appears, the generate guard wins in handle_turn.
 
 
-# ── #4 — severity-specific queries ─────────────────────────────────────────────
 
 class TestSeverityQuery:
     def test_severity_query_detection(self):
@@ -213,7 +205,6 @@ class TestSeverityQuery:
 
     def test_severity_query_ignores_non_adjacent(self):
         from protectme_agent.fast_path import severity_query
-        # "high-level summary" must not trigger a severity query
         assert severity_query("give me a high level summary") is None
 
     def test_two_low_risks_listed_and_asks(self):
@@ -222,7 +213,7 @@ class TestSeverityQuery:
         text = ans if isinstance(ans, str) else " ".join(ans)
         assert "2 low-risk items" in text
         assert "Quiet Hours" in text and "Guest Policy" in text
-        assert "?" in text  # asks which one
+        assert "?" in text 
 
     def test_never_says_no_low_when_low_exists(self):
         from protectme_agent.fast_path import build_severity_answer
@@ -254,7 +245,6 @@ class TestSeverityQuery:
         assert "[FastPath] severity_query" in _debug(events)
 
 
-# ── #5 — clause / risk number references ───────────────────────────────────────
 
 class TestClauseNumber:
     def test_parse_digit_forms(self):
@@ -299,12 +289,10 @@ class TestClauseNumber:
         events = asyncio.run(_collect(
             agent.handle_turn("explain clause 6", _session(active_clause_id="risk_001"))
         ))
-        # Number reference must override the stale active clause (risk_001).
         assert "Short Notice Period" in _sentences(events)
         assert "risk_006" in _debug(events)
 
 
-# ── #7 — TTS chunk timeout ─────────────────────────────────────────────────────
 
 class _FakeWS:
     def __init__(self):
@@ -319,7 +307,7 @@ class TestTtsTimeout:
         from app.services import voice_service
 
         async def _slow_synth(*args, **kwargs):
-            await asyncio.sleep(2.0)  # far longer than the timeout
+            await asyncio.sleep(2.0)  
             return b"never-reached"
 
         monkeypatch.setattr(voice_service, "synthesize_speech_fast", _slow_synth)
@@ -348,7 +336,6 @@ class TestTtsTimeout:
     def test_successful_chunk_sends_audio(self, monkeypatch):
         from app.services import voice_service
 
-        # 24kHz 16-bit mono WAV of ~0.05s silence
         import io, wave
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wf:

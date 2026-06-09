@@ -14,15 +14,13 @@ fall through to the normal Gemini routing.
 import re
 from typing import Optional
 
-# Fast-path keys
 BIGGEST_RISK     = "biggest_risk"
 EXPLAIN_CLAUSE   = "explain_active_clause"
 SHOULD_I_SIGN    = "should_i_sign"
 WHAT_TO_ASK      = "what_should_i_ask"
 GENERATE_MESSAGE = "generate_message"
 
-# Order matters: more specific / unambiguous intents are checked first so that,
-# e.g., "write a message about the biggest risk" routes to generate_message.
+
 _PATTERNS: list[tuple[str, re.Pattern]] = [
     (GENERATE_MESSAGE, re.compile(
         r"\b(write|draft|compose|prepare)\b.*\b(message|email|letter|note|whatsapp)\b"
@@ -30,12 +28,9 @@ _PATTERNS: list[tuple[str, re.Pattern]] = [
         r"|\b(message|email|letter) (to|for|about)\b",
         re.IGNORECASE)),
     (BIGGEST_RISK, re.compile(
-        # "biggest/largest/main/top/highest/worst … risk/issue/impact/scale/…"
         r"\b(biggest|largest|main|top|highest|greatest|worst|major)\b"
         r".{0,15}?\b(risk|clause|concern|issue|problem|impact|scale|danger|thing|part)s?\b"
-        # "most dangerous / most risky / most serious …"
         r"|\bmost (dangerous|serious|important|concerning|risky|severe|significant)\b"
-        # bare common phrasings
         r"|\b(biggest|main|worst|largest) (risk|issue|problem|concern|impact|scale)\b",
         re.IGNORECASE)),
     (SHOULD_I_SIGN, re.compile(
@@ -67,9 +62,6 @@ def match_fast_path(user_text: str) -> Optional[str]:
     return None
 
 
-# ── Phase 8F-mod: extra deterministic / fast-intent detection ────────────────
-
-# "explain more / easier / I didn't understand / simplify / in detail"
 _DETAIL_RE = re.compile(
     r"(explain.*\b(more|again|easier|simpl|further|detail)\b)"
     r"|\b(easier|simpler|simplif(y|ied)|more easy|easy way|in more detail|more detail|"
@@ -79,13 +71,11 @@ _DETAIL_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Arabic requested explicitly, or the message itself contains Arabic script.
 _ARABIC_RE = re.compile(
     r"\b(in arabic|arabic( language| please)?|translate to arabic)\b|[؀-ۿ]",
     re.IGNORECASE,
 )
 
-# Modify the latest generated draft.
 _MODIFY_RE = re.compile(
     r"\bmake it (much )?(short(er)?|long(er)?|simpler|formal|stronger|polite|firm|"
     r"firmer|better|nicer|clearer|softer|brief(er)?|concise|smaller)\b"
@@ -97,7 +87,6 @@ _MODIFY_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Situational recommendation ("should I reject", "am I safe", "can he charge me").
 _RECOMMEND_RE = re.compile(
     r"\bshould i (reject|refuse|accept|walk away|back out|negotiate|wait|leave|cancel|push back)\b"
     r"|\bif (he|she|they|the landlord|the other party) (refus|reject|decline|say no|won'?t|do(es)? not)\b"
@@ -116,9 +105,6 @@ def wants_generate(user_text: str) -> bool:
     return match_fast_path(user_text) == GENERATE_MESSAGE
 
 
-# ── Message format / length parsing (Phase 8-bugfix #3) ──────────────────────
-# "write WhatsApp message make it short" was generating an email. Detect the
-# requested format and any short/long instruction directly from the user text.
 _WHATSAPP_RE = re.compile(
     r"\b(whats ?app|whatsapp|wapp|\bwa\b|text(?: message)?|sms|dm)\b"
     r"|واتساب|واتس|رسالة قصيرة|رساله قصيره",
@@ -176,8 +162,6 @@ def is_recommendation(user_text: str) -> bool:
     return bool(_RECOMMEND_RE.search(user_text or ""))
 
 
-# Refers to the multiple selected clauses ("explain these clauses", "compare
-# these", "write a message about these", and Arabic equivalents).
 _SELECTED_RE = re.compile(
     r"\bthese (clauses?|two|three|risks?|ones|terms?|selected)\b"
     r"|\bthe(se)? selected (clauses?|risks?|ones)\b"
@@ -195,9 +179,6 @@ def wants_selected(user_text: str) -> bool:
     return bool(_SELECTED_RE.search(user_text or ""))
 
 
-# Follow-up phrasings that should REUSE the active selection (only when a
-# selection is already in context): pronouns, "explain more/again/easier",
-# "what about them", "both", "compare", and Arabic equivalents.
 _SELECTED_FOLLOWUP_RE = re.compile(
     r"\b(them|those|they)\b"
     r"|\bexplain (it )?(more|again|further|better)\b"
@@ -214,20 +195,13 @@ def selected_followup(user_text: str) -> bool:
     return bool(_SELECTED_FOLLOWUP_RE.search(user_text or ""))
 
 
-# ── PDF report download (Phase 8I) ───────────────────────────────────────────
-# "download/generate/export the report as a PDF", "make a PDF", "give me a file",
-# and Arabic equivalents. Deterministic — triggers a frontend download event.
 _PDF_RE = re.compile(
-    # English: a download/export verb near pdf/report/file, or bare "pdf".
     r"\b(download|generate|create|export|make|prepare|give me|send me|get me|build)\b"
     r"[^.?!]{0,25}\b(pdf|report|file|document|copy)\b"
     r"|\bpdf\b|\bdownload (the )?report\b|\bexport (the )?report\b"
-    # Arabic: a download/export/send verb stem near ملف/تقرير/pdf …
     r"|(?:تنزيل|تحميل|تنزّل|تنزل|ينزل|نزّل|نزل|نزله|حمّل|حمل|حمله|صدّر|صدر|أنزل|انزل"
     r"|ارسل|أرسل|اعمل|سوّي|سوي|عطني|اعطني|أعطني)[^.؟!]{0,15}(?:ملف|تقرير|pdf|بي دي اف)"
-    # … or "I want the report/file/pdf" …
     r"|(?:أريد|اريد|ابغى|أبغى|بدي|عايز)[^.؟!]{0,12}(?:التقرير|تقرير|الملف|ملف|pdf)"
-    # … or bare "pdf file" / "pdf report" / "the report file".
     r"|ملف\s*pdf|تقرير\s*pdf|ملف التقرير",
     re.IGNORECASE,
 )
@@ -238,7 +212,6 @@ def wants_pdf(user_text: str) -> bool:
     return bool(_PDF_RE.search(user_text or ""))
 
 
-# ── Per-turn / session language (Phase 8I-i18n) ──────────────────────────────
 _ENGLISH_RE = re.compile(
     r"\bin english\b|\benglish (please|language|version)\b|\bspeak english\b"
     r"|\breply in english\b|\banswer in english\b"
@@ -266,9 +239,6 @@ def resolve_response_language(user_text: str, session_lang: str = "en") -> str:
     return normalize_language(session_lang)
 
 
-# ── Arabic language support (Phase 8H) ───────────────────────────────────────
-# Lightweight, per-turn language detection + Arabic intent matching so Arabic
-# questions route to the same fast-path intents and answer from the risk_report.
 
 _ARABIC_SCRIPT = re.compile(r"[؀-ۿݐ-ݿࢠ-ࣿ]")
 
@@ -279,8 +249,6 @@ def detect_language(user_text: str) -> str:
     return "ar" if wants_arabic(user_text) else "en"
 
 
-# Arabic phrasings for each fast-path intent. Arabic has no word boundaries like
-# \b, so these match substrings (with common hamza spelling variants).
 _AR_PATTERNS: list[tuple[str, re.Pattern]] = [
     (GENERATE_MESSAGE, re.compile(
         r"(اكتب|أكتب|اكتبي|جهّز|جهز|صغ|صياغة|أنشئ|انشئ).{0,18}"
@@ -333,7 +301,7 @@ def _lc_first(s: str) -> str:
     if not s:
         return s
     head = s.split()[0]
-    if head.isupper() and len(head) > 1:   # e.g. "ABC", "PDF"
+    if head.isupper() and len(head) > 1:  
         return s
     return s[0].lower() + s[1:]
 
@@ -390,7 +358,6 @@ def build_biggest_risk_answer(report: dict):
     title = r.get("title", "this clause")
     why = (r.get("why_it_matters") or r.get("simple_explanation") or "").strip()
     if why:
-        # Strip a redundant lead-in so we don't get "because this means…".
         why = re.sub(r"^(this means that|this means|it means|this clause means)\s+", "", why, flags=re.IGNORECASE)
         tail = _prefix(why, "It matters because ", r"^(it matters|because|this matters)\b")
         return f"The biggest risk is {title}. {tail}"
@@ -476,7 +443,6 @@ def build_detail_explain_answer(report: dict, active_id: Optional[str]):
     if q:
         out.append(_ensure_period(f"Before you sign, ask them: {q}"))
     out.append(_negotiation_line(r))
-    # Cap at 5 short sentences.
     return out[:5] or None
 
 
@@ -532,10 +498,7 @@ def _explain_one(risk: dict, lead: str) -> list[str]:
     return out
 
 
-# ── Severity-specific queries (Phase 8-bugfix #4) ────────────────────────────
-# "explain the low risk", "first high risk", "second low risk", "the last medium
-# risk". Filter risks by severity deterministically so the agent never claims a
-# severity has no items when the report actually has them.
+
 _SEVERITY_WORDS = {
     "low": "Low", "medium": "Medium", "mid": "Medium",
     "high": "High", "critical": "Critical",
@@ -549,8 +512,6 @@ _NUM_WORDS = {
     "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
 }
 
-# A severity word adjacent to risk/clause/item/concern/issue/one — so a stray
-# "high" in normal prose ("the rent is high") doesn't trigger this path.
 _SEV_QUERY_RE = re.compile(
     r"\b(low|medium|mid|high|critical)\s+(risk|clause|item|concern|issue|one)s?\b"
     r"|\b(risk|clause|item|concern|issue)s?\s+(?:that (?:are|is)\s+)?(low|medium|mid|high|critical)\b",
@@ -599,7 +560,6 @@ def build_severity_answer(report: dict, user_text: str):
             f"Good news — there are no {sev_l}-risk items in this contract"
         )
 
-    # Specific ordinal requested ("first high risk", "last low risk").
     if ordinal is not None:
         idx = len(matched) - 1 if ordinal == -1 else ordinal - 1
         if 0 <= idx < len(matched):
@@ -610,7 +570,6 @@ def build_severity_answer(report: dict, user_text: str):
             f"{sev_l}-risk item{'s' if len(matched) != 1 else ''} in this contract"
         )
 
-    # No ordinal — one match: explain it; several: summarize and ask which.
     if len(matched) == 1:
         return _explain_one(matched[0], lead=f"The {sev_l}-risk item is")
 
@@ -628,8 +587,7 @@ def build_severity_answer(report: dict, user_text: str):
     )
 
 
-# ── Clause / risk number references (Phase 8-bugfix #5) ──────────────────────
-# "explain clause 6", "risk number 6", "the sixth risk", "number six" → risk_006.
+
 _CLAUSE_NUM_RE = re.compile(
     r"\b(?:risk|clause|item|point|number|no\.?|#)\s*(?:number\s*|no\.?\s*)?(\d{1,2})\b",
     re.IGNORECASE,
@@ -639,7 +597,6 @@ _NUM_WORD_RE = re.compile(
     r"(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b",
     re.IGNORECASE,
 )
-# Plain ordinal + risk/clause WITHOUT a severity word ("the sixth risk").
 _ORDINAL_RISK_RE = re.compile(
     r"\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last)\s+"
     r"(?:risk|clause|item|point|one)\b",
@@ -651,7 +608,7 @@ def parse_clause_number(user_text: str) -> Optional[int]:
     """Return a 1-based clause/risk number the user referenced (-1 = 'last'),
     or None. Skips severity-specific queries (handled by severity_query)."""
     t = user_text or ""
-    if severity_query(t):  # "second low risk" is a severity query, not clause N
+    if severity_query(t): 
         return None
     m = _CLAUSE_NUM_RE.search(t)
     if m:

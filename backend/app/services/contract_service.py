@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 # ── Make the agent package importable ────────────────────────────────────────
-# contract_service.py → services/ → app/ → backend/ → protectme-ai-agent/ → agent/
 _AGENT_ROOT = Path(__file__).resolve().parent.parent.parent.parent / "agent"
 if str(_AGENT_ROOT) not in sys.path:
     sys.path.insert(0, str(_AGENT_ROOT))
@@ -94,7 +93,6 @@ class ContractService:
                 f"[Agent] {risk_count} risks detected",
             ],
         )
-        # Return the updated session
         return session_repository.get(session.session_id)
 
     async def analyze_from_pdf(self, file_bytes: bytes, filename: str, language: str = "en") -> Session:

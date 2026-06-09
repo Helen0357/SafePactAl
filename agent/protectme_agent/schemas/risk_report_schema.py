@@ -40,13 +40,6 @@ class RiskItem(BaseModel):
     suggested_action: str = "Review carefully"
 
 
-# ── Field fallbacks ──────────────────────────────────────────────────────────
-# Gemini occasionally returns a risk with a blank field (most often
-# why_it_matters). We never want the UI / voice agent to show an empty section,
-# so blank fields are filled with safe, category- or severity-specific text.
-# (Keep this block in sync with backend/app/schemas/risk_schema.py.)
-
-# Category keyword → "why it matters" sentence. First match wins.
 _CATEGORY_WHY: list[tuple[tuple[str, ...], str]] = [
     (("maintenance", "repair", "upkeep"),
      "This matters because you may face recurring maintenance costs or unclear responsibility for repairs."),
@@ -64,7 +57,6 @@ _CATEGORY_WHY: list[tuple[tuple[str, ...], str]] = [
      "This matters because your personal information may be used or shared in ways you did not intend."),
 ]
 
-# Severity → generic "why it matters" sentence (used when no category matches).
 _SEVERITY_WHY: dict[str, str] = {
     "High": "This may create serious financial or legal risk if it is not clarified before signing.",
     "Medium": "This may create extra cost, responsibility, or uncertainty for you.",

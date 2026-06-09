@@ -8,7 +8,6 @@ import logging
 import sys
 from pathlib import Path
 
-# message_service.py → services/ → app/ → backend/ → project root → agent/
 _AGENT_ROOT = Path(__file__).resolve().parent.parent.parent.parent / "agent"
 if str(_AGENT_ROOT) not in sys.path:
     sys.path.insert(0, str(_AGENT_ROOT))
@@ -51,7 +50,6 @@ def _resolve_language(body_lang, header_lang, session_lang):
     return "en", "default"
 
 
-# English email/letter scaffolding that must NEVER appear in an Arabic draft.
 _ENGLISH_TEMPLATE_MARKERS = (
     "subject:", "dear ", "best regards", "kind regards", "warm regards",
     "i hope this email finds you well", "to whom it may concern",
@@ -74,9 +72,7 @@ def _is_acceptable_arabic(text: str) -> bool:
     return arabic > 0 and arabic >= latin
 
 
-# Deterministic Arabic message templates — used only as a last-resort fallback if
-# the model fails to produce Arabic after a retry. Guarantees the dashboard never
-# shows an English draft in Arabic mode.
+
 _AR_SUBJECT = {
     "clarification": "طلب توضيح بخصوص بنود العقد",
     "negotiation": "طلب التفاوض بشأن بعض بنود العقد",
@@ -107,7 +103,6 @@ def _arabic_fallback_draft(selected, message_type, tone, format, extra_instructi
     )
 
     if str(format).lower() == "whatsapp":
-        # Short, conversational — no subject line or formal headers.
         titles = "، ".join(r.get("title", "").strip() for r in selected if r.get("title"))
         parts = [f"مرحباً، {opening}"]
         if titles:
@@ -117,7 +112,6 @@ def _arabic_fallback_draft(selected, message_type, tone, format, extra_instructi
         parts.append("هل يمكن توضيح ذلك أو إعادة النظر فيه؟ شكراً لك.")
         return " ".join(parts)
 
-    # Email — Arabic subject, greeting, body, closing.
     lines = [
         f"الموضوع: {subject}",
         "",
@@ -159,11 +153,7 @@ class MessageService:
         if not session.risk_report:
             raise NoRiskReportError()
 
-        # Resolve the draft language. The body field is the primary channel (the
-        # X-Language header can be stripped or lag during navigation), then header,
-        # then the session language, then 'en'. For Arabic the prompt builder adds a
-        # strong Arabic-only directive; the chosen format (email/WhatsApp) and any
-        # user-supplied custom details (request.extra_instruction) are still honored.
+
         lang, lang_source = _resolve_language(
             getattr(request, "language", None),
             header_language,
@@ -189,8 +179,6 @@ class MessageService:
         tool = GenerateMessageTool()
         client = _build_gemini_client()
 
-        # extra_instruction carries only the user's custom details — the Arabic
-        # language enforcement lives in the prompt (driven by `language`).
         extra_instruction = request.extra_instruction or None
 
         logger.info(
@@ -216,10 +204,7 @@ class MessageService:
 
         try:
             draft = await _generate(extra_instruction)
-            # Arabic guarantee: the draft must be Arabic with no English email
-            # scaffolding ("Subject:", "Dear", "Best regards"). If not, retry once
-            # with a blunt directive; if it still fails, fall back to a deterministic
-            # Arabic draft so the dashboard never shows English in Arabic mode.
+        
             if lang == "ar" and not _is_acceptable_arabic(draft):
                 logger.warning(
                     "[MessageService] Arabic requested but draft looked English; retrying once."

@@ -33,8 +33,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
-# Resolve the service-account path the same way the app does.
-from app.core.config import settings  # noqa: E402
+from app.core.config import settings  
 if settings.google_application_credentials:
     cred = (Path(__file__).resolve().parent / settings.google_application_credentials)
     if cred.exists():
@@ -51,7 +50,7 @@ RESIDENTIAL LEASE AGREEMENT
 """
 
 UTTERANCE = "What is the biggest risk in this contract?"
-CHUNK_MS  = 128   # mimic the browser's ScriptProcessor frame size
+CHUNK_MS  = 128  
 
 
 async def synth_pcm_16k(text: str) -> bytes:
@@ -66,7 +65,6 @@ async def synth_pcm_16k(text: str) -> bytes:
             sample_rate_hertz=16000,
         ),
     )
-    # LINEAR16 comes back as a WAV container — strip the header to raw PCM.
     with wave.open(io.BytesIO(resp.audio_content), "rb") as wf:
         assert wf.getframerate() == 16000 and wf.getsampwidth() == 2 and wf.getnchannels() == 1
         return wf.readframes(wf.getnframes())
@@ -89,9 +87,7 @@ async def run():
         print(f"    Could not synthesize via Google Cloud TTS: {type(e).__name__}: {e}")
         print("    (Test needs Journey TTS creds to fabricate mic audio.)")
         sys.exit(2)
-    # Push-to-talk path: NO trailing silence. We send speech, then an
-    # end_audio_turn signal (what the browser's Stop button now sends), which
-    # makes the backend call send_realtime_input(audio_stream_end=True).
+
     dur_s = len(pcm) / 2 / 16000
     print(f"    PCM bytes={len(pcm):,} duration={dur_s:.2f}s (push-to-talk, no trailing silence)")
 
@@ -112,7 +108,6 @@ async def run():
     t0 = time.monotonic()
 
     async with websockets.connect(ws_url, max_size=20 * 1024 * 1024) as ws:
-        # Drain handshake.
         for _ in range(6):
             try:
                 ev = json.loads(await asyncio.wait_for(ws.recv(), timeout=20))
@@ -132,18 +127,16 @@ async def run():
                     "audio": base64.b64encode(frame).decode(),
                 }))
                 sent += 1
-                await asyncio.sleep(CHUNK_MS / 1000)   # stream in real time
+                await asyncio.sleep(CHUNK_MS / 1000)  
 
         async def feed_then_end():
             await feed_audio()
-            # Release the mic — backend converts this to audio_stream_end (VAD finalize).
             if ws.state.name == "OPEN":
                 await ws.send(json.dumps({"type": "end_audio_turn"}))
                 print(f"    end_audio_turn sent after {sent} chunks")
 
         feeder = asyncio.create_task(feed_then_end())
 
-        # Collect responses for up to ~25s.
         deadline = time.monotonic() + 25
         while time.monotonic() < deadline:
             try:

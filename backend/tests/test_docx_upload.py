@@ -48,7 +48,7 @@ def _make_docx_bytes(paragraphs):
 
 
 def _make_pdf_bytes(text):
-    import fitz  # PyMuPDF
+    import fitz  
     doc = fitz.open()
     page = doc.new_page()
     page.insert_text((72, 72), text)
@@ -61,7 +61,6 @@ def _patch_orchestrator():
     return patch("app.services.contract_service._get_orchestrator", return_value=mock_orch), mock_orch
 
 
-# ── DOCX extraction unit ───────────────────────────────────────────────────────
 
 class TestDocxExtraction:
     def test_extracts_paragraphs(self):
@@ -95,7 +94,6 @@ class TestDocxExtraction:
             extract_text_from_docx(b"this is not a docx file at all")
 
 
-# ── /api/contracts/analyze upload routing ──────────────────────────────────────
 
 class TestUploadRouting:
     def test_docx_upload_accepted(self):
@@ -110,7 +108,6 @@ class TestUploadRouting:
             )
         assert resp.status_code == 200, resp.text
         assert "session_id" in resp.json()
-        # The extracted DOCX text reached the analysis pipeline.
         sent_text = mock_orch.analyze_contract.call_args.args[0]
         assert "late fee" in sent_text.lower()
 

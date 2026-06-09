@@ -37,7 +37,6 @@ _DISCLAIMER_AR = (
     "الخطرة وإعداد أسئلة أفضل قبل التوقيع."
 )
 
-# Severity ordering (High first, then Medium, then Low).
 _SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "minimal": 4}
 _SEV_AR = {"critical": "حرجة", "high": "عالية", "medium": "متوسطة",
            "low": "منخفضة", "minimal": "بسيطة"}
@@ -84,7 +83,7 @@ _HEADINGS = {
 }
 
 _AR_FONT_NAME = "PMArabic"
-_arabic_font_ready: Optional[bool] = None  # cache: None=unknown, True/False
+_arabic_font_ready: Optional[bool] = None  
 
 
 def _find_arabic_font() -> Optional[str]:
@@ -96,7 +95,7 @@ def _find_arabic_font() -> Optional[str]:
         r"C:\Windows\Fonts\tahoma.ttf",
         r"C:\Windows\Fonts\segoeui.ttf",
         "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # limited Arabic, last resort
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  
         "/Library/Fonts/Arial.ttf",
         "/System/Library/Fonts/Supplemental/Arial.ttf",
     ]
@@ -113,8 +112,8 @@ def _ensure_arabic_font() -> bool:
     if _arabic_font_ready is not None:
         return _arabic_font_ready
     try:
-        import arabic_reshaper  # noqa: F401
-        from bidi.algorithm import get_display  # noqa: F401
+        import arabic_reshaper 
+        from bidi.algorithm import get_display 
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
 
@@ -126,7 +125,7 @@ def _ensure_arabic_font() -> bool:
         pdfmetrics.registerFont(TTFont(_AR_FONT_NAME, font_path))
         logger.info("[Report] Arabic font registered: %s", font_path)
         _arabic_font_ready = True
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc: 
         logger.warning("[Report] Arabic shaping unavailable (%s) — using default font.", exc)
         _arabic_font_ready = False
     return _arabic_font_ready
@@ -139,7 +138,7 @@ def _shape_ar(text: str) -> str:
         from bidi.algorithm import get_display
 
         return get_display(arabic_reshaper.reshape(text))
-    except Exception:  # noqa: BLE001
+    except Exception: 
         return text
 
 
@@ -241,7 +240,7 @@ def generate_risk_report_pdf(risk_report: dict, language: str = "en") -> bytes:
     meta_cells = [[Paragraph(f"<b>{_h(k)}</b>", meta_style), Paragraph(v, meta_style)]
                   for k, v in meta_rows]
     if ar_ok:
-        meta_cells = [[c[1], c[0]] for c in meta_cells]  # RTL: value left, label right
+        meta_cells = [[c[1], c[0]] for c in meta_cells] 
     meta_table = Table(meta_cells, colWidths=([None, 45 * mm] if ar_ok else [45 * mm, None]))
     meta_table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -295,7 +294,6 @@ def generate_risk_report_pdf(risk_report: dict, language: str = "en") -> bytes:
         story.append(header)
         story.append(body)
 
-    # Honest note if Arabic was requested but no Arabic font was available.
     if is_ar and not ar_ok:
         story.append(Spacer(1, 8))
         story.append(Paragraph(

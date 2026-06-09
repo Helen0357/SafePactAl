@@ -105,21 +105,18 @@ async def run():
     sid = data["session_id"]
     risks = data["risk_report"]["risks"]
     print(f"session={sid[:8]}…  {len(risks)} risks")
-    # pick a specific, non-first clause to prove active-clause correctness
     target = next((x for x in risks if "deposit" in x["title"].lower()), risks[-1])
     print(f"target clause for 'explain': {target['id']} — {target['title']}")
 
     ws_url = f"{WS_BASE}/ws/voice/{sid}"
     results = {}
     async with websockets.connect(ws_url, max_size=20 * 1024 * 1024) as ws:
-        # drain greeting
         gt = await turn_drain_greeting(ws)
         print(f"\n[greeting] audio_chunks={gt}")
 
         results["Q1 largest risk"] = await turn(ws, "What is the largest risk?", "Q1")
         results["Q1b largest scale"] = await turn(ws, "What is the largest scale?", "Q1b")
 
-        # set active clause via REST (what the UI does on 'Ask Agent')
         async with httpx.AsyncClient(timeout=30) as http:
             ar = await http.post(f"{BASE_URL}/api/session/active-clause",
                                  json={"session_id": sid, "active_clause_id": target["id"]})
@@ -146,7 +143,6 @@ async def run():
     q2_about_target = "deposit" in " ".join(results["Q2 explain clause"]["sentences"]).lower()
     q3_fast = any("should_i_sign" in d for d in results["Q3 should I sign"]["debug"])
     draft_ok = bool(results["Q4 write message"]["draft"])
-    # Complex fallback must answer from the report — never ask the user for the list.
     q5_text = " ".join(results["Q5 complex"]["sentences"]).lower()
     bad_phrases = ["share the", "provide the list", "list of the", "share your", "give me the list",
                    "don't have the", "do not have", "please share", "as an ai"]
@@ -179,7 +175,6 @@ async def turn_drain_greeting(ws, timeout=15):
         elif ev.get("type") == "audio_done":
             break
         elif ev.get("type") == "sentence" and audio == 0:
-            # greeting sentence arrived; keep collecting its audio briefly
             pass
     return audio
 

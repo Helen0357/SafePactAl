@@ -10,7 +10,7 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
     Phase 2: called by contract_service.analyze_from_pdf().
     """
     try:
-        import fitz  # PyMuPDF
+        import fitz  
     except ImportError:
         raise RuntimeError(
             "PyMuPDF is not installed. Run: pip install PyMuPDF"
@@ -54,7 +54,7 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
     import io
 
     try:
-        import docx  # python-docx
+        import docx  
     except ImportError:
         raise RuntimeError(
             "python-docx is not installed. Run: pip install python-docx"
@@ -69,7 +69,6 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
         ) from exc
 
     parts = [p.text for p in document.paragraphs]
-    # Include table cell text — contracts often place terms in tables.
     for table in document.tables:
         for row in table.rows:
             for cell in row.cells:

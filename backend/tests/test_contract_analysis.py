@@ -8,8 +8,7 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-# Make the agent package importable in the test environment
-# tests/ → backend/ → protectme-ai-agent/ → agent/
+
 _AGENT_ROOT = Path(__file__).resolve().parent.parent.parent / "agent"
 if str(_AGENT_ROOT) not in sys.path:
     sys.path.insert(0, str(_AGENT_ROOT))
@@ -21,7 +20,6 @@ from app.main import app
 client = TestClient(app)
 
 
-# ── JSON extraction utility tests ─────────────────────────────────────────────
 
 class TestExtractJson:
     def _extract(self, text):
@@ -50,7 +48,6 @@ class TestExtractJson:
         assert self._extract("") is None
 
 
-# ── RiskReport schema validation ──────────────────────────────────────────────
 
 class TestRiskReportSchema:
     def _make_valid_report(self):
@@ -87,14 +84,12 @@ class TestRiskReportSchema:
         from protectme_agent.schemas.risk_report_schema import RiskReport, RiskSeverity
         base = self._make_valid_report()
         base_risk = base["risks"][0]
-        # Build an unsorted list: Low, Medium, High
         base["risks"] = [
             {**base_risk, "id": "risk_001", "severity": "Low",    "title": "Minor issue"},
             {**base_risk, "id": "risk_002", "severity": "Medium",  "title": "Medium issue"},
             {**base_risk, "id": "risk_003", "severity": "High",   "title": "Serious issue"},
         ]
         report = RiskReport(**base)
-        # Apply same sort the ContractAnalysisAgent uses
         _ORDER = {RiskSeverity.HIGH: 0, RiskSeverity.MEDIUM: 1, RiskSeverity.LOW: 2}
         report.risks.sort(key=lambda r: _ORDER.get(r.severity, 9))
         assert report.risks[0].severity == RiskSeverity.HIGH
@@ -102,7 +97,6 @@ class TestRiskReportSchema:
         assert report.risks[2].severity == RiskSeverity.LOW
 
 
-# ── API endpoint tests (mocked Gemini) ───────────────────────────────────────
 
 MOCK_RISK_REPORT = {
     "contract_type": "Rental Agreement",

@@ -21,9 +21,7 @@ class MessageFormat(str, Enum):
     WHATSAPP = "whatsapp"
 
 
-# Defensive aliases: the frontend sends canonical English values, but if Arabic
-# display labels (or English display labels) ever reach the API they are mapped to
-# the canonical enum value here so message type/tone/format always resolve correctly.
+
 _TYPE_ALIASES = {
     "استفسار": "clarification", "توضيح": "clarification", "clarify": "clarification",
     "تفاوض": "negotiation", "negotiate": "negotiation",
@@ -47,10 +45,10 @@ def _normalize_choice(value, aliases):
     if not isinstance(value, str):
         return value
     key = value.strip()
-    if key in aliases:            # exact match (Arabic labels)
+    if key in aliases:         
         return aliases[key]
     low = key.lower()
-    return aliases.get(low, low)  # English alias, else assume canonical
+    return aliases.get(low, low) 
 
 
 class GenerateMessageRequest(BaseModel):
@@ -60,8 +58,7 @@ class GenerateMessageRequest(BaseModel):
     tone: MessageTone = MessageTone.PROFESSIONAL
     format: MessageFormat = MessageFormat.EMAIL
     extra_instruction: Optional[str] = None
-    # Draft language ('ar' | 'en'). Sent in the body as the primary, reliable
-    # channel (headers can be stripped/lag); the X-Language header is the backup.
+
     language: Optional[str] = None
 
     @field_validator("message_type", mode="before")

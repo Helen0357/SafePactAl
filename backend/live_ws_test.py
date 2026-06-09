@@ -56,7 +56,6 @@ async def collect_turn(ws, label, expect_draft=False, timeout=AUDIO_TIMEOUT):
         "rates": set(),
     }
     t0 = time.monotonic()
-    # After audio_done: for draft turns, keep listening up to draft_deadline for draft_ready.
     draft_deadline = None
     while True:
         try:
@@ -64,11 +63,10 @@ async def collect_turn(ws, label, expect_draft=False, timeout=AUDIO_TIMEOUT):
             raw = await asyncio.wait_for(ws.recv(), timeout=recv_to)
         except asyncio.TimeoutError:
             if draft_deadline:
-                break  # waited long enough for draft
+                break 
             print(f"    [{label}] TIMEOUT after {time.monotonic()-t0:.1f}s")
             break
         except Exception as e:
-            # Connection closed — fine if we already got what we need
             if res["t_audio_done"] is not None:
                 break
             print(f"    [{label}] conn closed: {type(e).__name__}")
@@ -93,7 +91,7 @@ async def collect_turn(ws, label, expect_draft=False, timeout=AUDIO_TIMEOUT):
         elif et == "audio_done":
             res["t_audio_done"] = round(el, 2)
             if expect_draft and not res["draft_ready"]:
-                draft_deadline = time.monotonic() + 8  # keep listening for draft
+                draft_deadline = time.monotonic() + 8  
                 continue
             break
         elif et == "error":
@@ -124,7 +122,6 @@ async def run():
     # ── Q1: biggest risk ──────────────────────────────────────
     print("\n[2] Q1 — 'What is the biggest risk?'")
     async with websockets.connect(ws_url, max_size=20 * 1024 * 1024) as ws:
-        # drain handshake
         for _ in range(4):
             try:
                 ev = json.loads(await asyncio.wait_for(ws.recv(), timeout=20))

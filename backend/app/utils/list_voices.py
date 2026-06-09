@@ -55,7 +55,7 @@ def main() -> None:
         sys.exit(1)
     try:
         rows = list_voices(prefix)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  
         print(f"ERROR listing voices: {exc}")
         sys.exit(1)
     if not rows:

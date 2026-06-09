@@ -31,8 +31,7 @@ Clause references: Do NOT write placeholder brackets like "[X]", "[Clause X]", o
 Instead, refer to each clause by its actual wording, category, or purpose as shown in the clause texts above.
 Only names, addresses, and contact details genuinely unknown from the contract may remain as placeholders (e.g. [Your Name], [Recipient Name]).{extra_section}"""
 
-# Format guidelines, localized so an Arabic draft uses Arabic labels (الموضوع:)
-# instead of an English "Subject:".
+
 _FORMAT_GUIDELINES_EN = (
     "- Email: include Subject line, salutation, body, and sign-off.\n"
     "- WhatsApp: short, conversational, no formal headers needed."
@@ -43,8 +42,7 @@ _FORMAT_GUIDELINES_AR = (
     "- واتساب (WhatsApp): رسالة قصيرة بأسلوب محادثة ودّي بالعربية، دون ترويسات رسمية."
 )
 
-# Strong, prominent Arabic-only directive placed at the TOP of the prompt so it
-# overrides the English structural cues (it is bilingual so the model cannot miss it).
+
 _ARABIC_DIRECTIVE = (
     "اكتب الرسالة بالكامل باللغة العربية الفصحى الواضحة والمهنية. يجب أن يكون كل شيء "
     'بالعربية: سطر الموضوع، والتحية، والنص الأساسي، والخاتمة. استخدم "الموضوع:" بدلاً من '

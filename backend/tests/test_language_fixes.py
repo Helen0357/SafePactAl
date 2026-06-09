@@ -18,7 +18,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# tests/ → backend/ → protectme-ai-agent/ → agent/
 _AGENT_ROOT = Path(__file__).resolve().parent.parent.parent / "agent"
 if str(_AGENT_ROOT) not in sys.path:
     sys.path.insert(0, str(_AGENT_ROOT))
@@ -73,7 +72,6 @@ def _contains_arabic(text: str) -> bool:
     return any("؀" <= ch <= "ۿ" for ch in (text or ""))
 
 
-# ── REST generate-message X-Language (Issue 1) ─────────────────────────────────
 
 class TestGenerateMessageLanguage:
     """The X-Language header drives the language of the generated draft."""

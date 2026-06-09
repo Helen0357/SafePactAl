@@ -17,22 +17,18 @@ logger = logging.getLogger(__name__)
 
 _SAMPLE_RATE  = 24_000
 _CHANNELS     = 1
-_SAMPLE_WIDTH = 2  # 16-bit PCM
+_SAMPLE_WIDTH = 2  
 
-# ── Google Cloud TTS ──────────────────────────────────────────────────────────
-_GCP_DEFAULT_VOICE   = "en-US-Journey-D"   # Warm, calm professional male (Journey)
+_GCP_DEFAULT_VOICE   = "en-US-Journey-D"   
 _GCP_DEFAULT_LANG    = "en-US"
-_GCP_SPEAKING_RATE   = 1.05                # Slightly faster for voice UX
+_GCP_SPEAKING_RATE   = 1.05             
 
-# Lazy singleton — created on first TTS call after GOOGLE_APPLICATION_CREDENTIALS is set
 _gcp_client: Optional[Any] = None
 
-# ── Gemini TTS fallback ───────────────────────────────────────────────────────
 _GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"
 _GEMINI_TTS_VOICE = "Charon"
 
 
-# ── Utilities ─────────────────────────────────────────────────────────────────
 
 def _pcm_to_wav(pcm_bytes: bytes) -> bytes:
     """Wrap raw PCM bytes in a WAV container. In-memory only, no disk writes."""
@@ -60,7 +56,6 @@ def _get_gcp_client() -> Any:
     return _gcp_client
 
 
-# ── Google Cloud TTS ──────────────────────────────────────────────────────────
 
 async def _synthesize_google_cloud_journey(
     text: str,
@@ -106,7 +101,6 @@ async def _synthesize_google_cloud_journey(
         return None
 
 
-# ── Gemini TTS fallback ───────────────────────────────────────────────────────
 
 async def _synthesize_gemini(text: str, api_key: str) -> Optional[bytes]:
     """Gemini TTS fallback (~5-10s per sentence). Returns WAV bytes or None."""
@@ -131,7 +125,7 @@ async def _synthesize_gemini(text: str, api_key: str) -> Optional[bytes]:
             config=config,
         )
         pcm = response.candidates[0].content.parts[0].inline_data.data
-        if isinstance(pcm, str):  # some SDK versions return base64 string
+        if isinstance(pcm, str):  
             pcm = base64.b64decode(pcm)
         wav = _pcm_to_wav(pcm)
         logger.debug("Gemini TTS ok — %d chars -> %d wav bytes", len(text), len(wav))
@@ -141,11 +135,10 @@ async def _synthesize_gemini(text: str, api_key: str) -> Optional[bytes]:
         return None
 
 
-# ── Public entry points ───────────────────────────────────────────────────────
 
 async def synthesize_speech_fast(
     text: str,
-    google_cloud_api_key: str = "",  # unused in service-account mode; kept for compat
+    google_cloud_api_key: str = "",  
     gemini_api_key: str = "",
     voice_name: str = _GCP_DEFAULT_VOICE,
     language_code: str = _GCP_DEFAULT_LANG,

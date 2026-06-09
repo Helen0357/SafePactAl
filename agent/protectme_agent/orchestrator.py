@@ -23,7 +23,7 @@ class Orchestrator:
     def __init__(self, gemini_client=None):
         self._client = gemini_client
         self._analysis_agent = None
-        self._conversation_agent = None  # Phase 4
+        self._conversation_agent = None
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
@@ -43,7 +43,6 @@ class Orchestrator:
         """
         agent = self._get_analysis_agent()
         report = await agent.analyze(text, language=language)
-        # mode='json' ensures enum values are strings, datetimes are ISO strings, etc.
         return report.model_dump(mode="json")
 
     async def handle_conversation_turn(

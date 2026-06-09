@@ -47,8 +47,7 @@ async def handle_analyze_contract(
             detail="Provide either a PDF file (field: 'file') or contract text (field: 'text').",
         )
 
-    # session.risk_report is a plain dict from model_dump(mode='json').
-    # Reconstruct the typed RiskReport for the response schema.
+
     return AnalyzeResponse(
         session_id=session.session_id,
         risk_report=RiskReport(**session.risk_report),

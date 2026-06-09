@@ -121,7 +121,6 @@ async def test_conversation_agent_qa():
     client = _make_client()
     agent = ConversationAgent(client)
 
-    # Inject mock IntentRouter so only the tool/streaming path is tested
     mock_router = MagicMock()
     mock_router.route = AsyncMock(return_value=IntentResult(
         intent=Intent.ASK_QUESTION,
